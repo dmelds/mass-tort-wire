@@ -242,7 +242,26 @@ function fetchReddit(subs) {
       });
     });
     out.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
-    return out.slice(0, 18);
+    if (out.length > 0) return out.slice(0, 18);
+    // Direct fetch blocked or empty: fall back to Reddit's RSS endpoints
+    // through the feeds function (server-side, no CORS).
+    var rssUrls = queries.map(function (q) {
+      return (scoped
+        ? "https://www.reddit.com/r/" + subs.join("+") + "/search.rss"
+        : "https://www.reddit.com/search.rss")
+        + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : "");
+    });
+    return fetch("/.netlify/functions/feeds", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls: rssUrls })
+    }).then(function (res) { return res.json(); })
+      .then(function (data) {
+        return (data.items || []).map(function (i) {
+          i.channel = "reddit"; i.meta = ""; return i;
+        }).slice(0, 18);
+      })
+      .catch(function () { return []; });
   });
 }
 
@@ -312,8 +331,8 @@ function fetchFirms() {
 }
 
 // ── Scan ──
-document.getElementById("scanBtn").onclick = function () {
-  var btn = this;
+function runScan() {
+  var btn = document.getElementById("scanBtn");
   btn.disabled = true;
   btn.textContent = "SCANNING\u2026";
   items = [];
@@ -343,7 +362,11 @@ document.getElementById("scanBtn").onclick = function () {
     btn.disabled = false;
     btn.textContent = "RUN SCAN";
   });
-};
+}
+
+document.getElementById("scanBtn").onclick = runScan;
+// Auto-scan when the app opens
+window.addEventListener("load", runScan);
 
 // ── Render ──
 function esc(s) {
