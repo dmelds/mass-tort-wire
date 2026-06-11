@@ -25,6 +25,7 @@
     --reddit: #C2511F;
     --linkedin: #2E5E7E;
     --firms: #3E6B4F;
+    --trends: #5E5480;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -50,6 +51,7 @@
   .channel-status .reddit { color: var(--reddit); }
   .channel-status .linkedin { color: var(--linkedin); }
   .channel-status .firms { color: var(--firms); }
+  .channel-status .trends { color: var(--trends); }
 
   #config { display: none; border-bottom: 1px solid var(--rule); background: var(--panel); padding: 16px 20px; }
   #config.open { display: block; }
@@ -82,10 +84,12 @@
   .item.reddit { border-left-color: var(--reddit); }
   .item.linkedin { border-left-color: var(--linkedin); }
   .item.firms { border-left-color: var(--firms); }
+  .item.trends { border-left-color: var(--trends); }
   .item .src { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; margin-bottom: 4px; }
   .item.reddit .src { color: var(--reddit); }
   .item.linkedin .src { color: var(--linkedin); }
   .item.firms .src { color: var(--firms); }
+  .item.trends .src { color: var(--trends); }
   .item .title { font-family: 'Spectral', Georgia, serif; font-size: 16px; font-weight: 600; line-height: 1.3; }
   .item .sum { color: var(--dim); font-size: 13px; line-height: 1.4; margin-top: 4px; }
   .item .meta { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); margin-top: 4px; }
@@ -108,6 +112,7 @@
     <span class="reddit">REDDIT <span id="st-reddit"></span></span>
     <span class="linkedin">LINKEDIN <span id="st-linkedin"></span></span>
     <span class="firms">FIRM WIRE <span id="st-firms"></span></span>
+    <span class="trends">TRENDS <span id="st-trends"></span></span>
   </div>
 </div>
 
@@ -131,6 +136,7 @@
   <button data-f="reddit">REDDIT (<span id="ct-reddit">0</span>)</button>
   <button data-f="linkedin">LINKEDIN (<span id="ct-linkedin">0</span>)</button>
   <button data-f="firms">FIRM WIRE (<span id="ct-firms">0</span>)</button>
+  <button data-f="trends">TRENDS (<span id="ct-trends">0</span>)</button>
 </div>
 
 <main id="feed">
@@ -141,7 +147,7 @@
 </main>
 
 <footer>
-  REDDIT: LIVE PUBLIC API &middot; FIRM WIRE: RSS VIA NETLIFY FUNCTION + OPTIONAL AI SWEEP &middot; LINKEDIN: AI WEB SEARCH &middot; SESSION ONLY, NOTHING STORED
+  REDDIT: LIVE PUBLIC API &middot; FIRM WIRE: RSS + OPTIONAL AI SWEEP &middot; LINKEDIN: AI WEB SEARCH &middot; TRENDS: GOOGLE TRENDS (UNOFFICIAL) &middot; SESSION ONLY, NOTHING STORED
 </footer>
 
 <script>
@@ -153,7 +159,7 @@ var filter = "all";
 var scanned = false;
 var aiUnavailable = false;
 
-var CHANNELS = { reddit: "REDDIT", linkedin: "LINKEDIN", firms: "FIRM WIRE" };
+var CHANNELS = { reddit: "REDDIT", linkedin: "LINKEDIN", firms: "FIRM WIRE", trends: "TRENDS" };
 
 document.getElementById("today").textContent = new Date().toISOString().slice(0, 10);
 document.getElementById("firmsInput").value = "Weitz & Luxenberg, Sokolove Law, The Gori Law Firm, Motley Rice, Keller Postman, Morgan & Morgan";
@@ -341,6 +347,23 @@ function fetchFirms() {
   });
 }
 
+// ── Google Trends via Netlify Function (unofficial widget API) ──
+function fetchTrends() {
+  return fetch("/.netlify/functions/trends", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keywords: topics.slice(0, 5) })
+  }).then(function (res) {
+    if (res.status === 404) throw new Error("TRENDS FUNCTION NOT DEPLOYED (404). CREATE NETLIFY/FUNCTIONS/TRENDS.JS.");
+    return res.json().then(function (data) {
+      if (!res.ok) throw new Error(data.error || ("TRENDS ERROR " + res.status));
+      return (data.items || []).map(function (i) {
+        i.channel = "trends"; i.meta = ""; return i;
+      });
+    });
+  });
+}
+
 // ── Scan ──
 function runScan() {
   var btn = document.getElementById("scanBtn");
@@ -351,7 +374,7 @@ function runScan() {
   scanned = true;
   aiUnavailable = false;
   renderFeed();
-  ["reddit", "linkedin", "firms"].forEach(function (ch) { setStatus(ch, "scanning"); });
+  ["reddit", "linkedin", "firms", "trends"].forEach(function (ch) { setStatus(ch, "scanning"); });
 
   var subs = document.getElementById("subsInput").value
     .split(/[,\s]+/)
@@ -373,7 +396,8 @@ function runScan() {
   Promise.allSettled([
     run("reddit", function () { return fetchReddit(subs); }),
     run("linkedin", fetchLinkedIn),
-    run("firms", fetchFirms)
+    run("firms", fetchFirms),
+    run("trends", fetchTrends)
   ]).then(function () {
     btn.disabled = false;
     btn.textContent = "RUN SCAN";
@@ -392,7 +416,7 @@ function esc(s) {
 }
 
 function renderFeed() {
-  ["reddit", "linkedin", "firms"].forEach(function (ch) {
+  ["reddit", "linkedin", "firms", "trends"].forEach(function (ch) {
     document.getElementById("ct-" + ch).textContent = items.filter(function (i) { return i.channel === ch; }).length;
   });
 
