@@ -245,10 +245,20 @@ function setStatus(ch, s) {
   document.getElementById("st-" + ch).textContent = map[s] || "";
 }
 
-// ── Reddit: three attempts in order ──
-// 1) direct browser fetch of reddit's JSON API
-// 2) reddit's RSS endpoints via the Netlify feeds function
-// 3) reddit's JSON API via a public CORS relay (different IPs than Netlify)
+// Fetch with a hard timeout so a hung request can't stall the whole scan
+function fetchT(url, opts, ms) {
+  var ctrl = new AbortController();
+  var timer = setTimeout(function () { ctrl.abort(); }, ms || 10000);
+  opts = opts || {};
+  opts.signal = ctrl.signal;
+  return fetch(url, opts).finally(function () { clearTimeout(timer); });
+}
+
+// ── Reddit: four attempts in order ──
+// 1) official OAuth API via Netlify function (most reliable; needs creds)
+// 2) direct browser fetch of reddit's JSON API
+// 3) reddit's RSS endpoints via the Netlify feeds function
+// 4) reddit's JSON API via a public CORS relay
 function redditJsonUrls(subs) {
   var scoped = subs.length > 0;
   var base = scoped
@@ -285,15 +295,30 @@ function parseRedditResults(results) {
   return out.slice(0, 18);
 }
 
+function redditViaApi(subs) {
+  var searches = topics.slice(0, 4).map(function (q) {
+    return { q: q, subs: subs, limit: 6 };
+  });
+  searches.push({ q: "title:lawsuit", subs: ["law"], limit: 8 });
+  return fetchT("/.netlify/functions/reddit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ searches: searches })
+  }, 15000).then(function (res) {
+    if (!res.ok) return [];  // missing creds or function: fall through to next path
+    return res.json().then(function (data) { return data.items || []; });
+  }).catch(function () { return []; });
+}
+
 function redditDirect(urls) {
   return Promise.allSettled(urls.map(function (u) {
-    return fetch(u).then(function (r) { return r.json(); });
+    return fetchT(u, {}, 8000).then(function (r) { return r.json(); });
   })).then(parseRedditResults);
 }
 
 function redditViaRelay(urls) {
   return Promise.allSettled(urls.map(function (u) {
-    return fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(u))
+    return fetchT("https://api.allorigins.win/raw?url=" + encodeURIComponent(u), {}, 12000)
       .then(function (r) { return r.json(); });
   })).then(parseRedditResults);
 }
@@ -316,7 +341,11 @@ function redditViaRss(subs) {
 
 function fetchReddit(subs) {
   var urls = redditJsonUrls(subs);
-  return redditDirect(urls)
+  return redditViaApi(subs)
+    .then(function (out) {
+      if (out.length) return out;
+      return redditDirect(urls);
+    })
     .then(function (out) {
       if (out.length) return out;
       return redditViaRss(subs).catch(function () { return []; });
@@ -326,7 +355,7 @@ function fetchReddit(subs) {
       return redditViaRelay(urls);
     })
     .then(function (out) {
-      if (!out.length) throw new Error("REDDIT BLOCKED ALL THREE PATHS (DIRECT, NETLIFY RSS, RELAY). USUALLY TEMPORARY; RE-SCAN IN A FEW MINUTES.");
+      if (!out.length) throw new Error("REDDIT BLOCKED ALL PATHS. FOR A RELIABLE FIX: CREATE NETLIFY/FUNCTIONS/REDDIT.JS AND ADD REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET IN NETLIFY (FREE APP AT REDDIT.COM/PREFS/APPS).");
       return out;
     });
 }
