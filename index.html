@@ -148,6 +148,7 @@
 // ── State ──
 var topics = ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"];
 var items = [];
+var errors = {};
 var filter = "all";
 var scanned = false;
 var aiUnavailable = false;
@@ -218,10 +219,13 @@ function fetchReddit(subs) {
   var base = scoped
     ? "https://www.reddit.com/r/" + subs.join("+") + "/search.json"
     : "https://www.reddit.com/search.json";
-  var queries = topics.slice(0, 4);
-  return Promise.allSettled(queries.map(function (q) {
-    return fetch(base + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : ""))
-      .then(function (r) { return r.json(); });
+  var queries = topics.slice(0, 4).map(function (q) {
+    return base + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : "");
+  });
+  // Pinned: always check r/law for new posts with "lawsuit" in the title
+  queries.push("https://www.reddit.com/r/law/search.json?q=" + encodeURIComponent("title:lawsuit") + "&sort=new&t=month&limit=8&restrict_sr=1");
+  return Promise.allSettled(queries.map(function (u) {
+    return fetch(u).then(function (r) { return r.json(); });
   })).then(function (results) {
     var seen = {}, out = [];
     results.forEach(function (r) {
@@ -245,23 +249,20 @@ function fetchReddit(subs) {
     if (out.length > 0) return out.slice(0, 18);
     // Direct fetch blocked or empty: fall back to Reddit's RSS endpoints
     // through the feeds function (server-side, no CORS).
-    var rssUrls = queries.map(function (q) {
+    var rssUrls = topics.slice(0, 4).map(function (q) {
       return (scoped
         ? "https://www.reddit.com/r/" + subs.join("+") + "/search.rss"
         : "https://www.reddit.com/search.rss")
         + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : "");
     });
-    return fetch("/.netlify/functions/feeds", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls: rssUrls })
-    }).then(function (res) { return res.json(); })
-      .then(function (data) {
-        return (data.items || []).map(function (i) {
-          i.channel = "reddit"; i.meta = ""; return i;
-        }).slice(0, 18);
-      })
-      .catch(function () { return []; });
+    rssUrls.push("https://www.reddit.com/r/law/search.rss?q=" + encodeURIComponent("title:lawsuit") + "&sort=new&t=month&limit=8&restrict_sr=1");
+    return callFeedsFn(rssUrls).then(function (arr) {
+      return arr.map(function (i) {
+        i.channel = "reddit"; i.meta = ""; return i;
+      }).slice(0, 18);
+    }).catch(function (err) {
+      throw new Error("REDDIT BLOCKED IN BROWSER; FALLBACK FAILED: " + err.message);
+    });
   });
 }
 
@@ -291,16 +292,23 @@ function fetchLinkedIn() {
   });
 }
 
-function fetchFeeds() {
-  var urls = document.getElementById("feedsInput").value
-    .split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
-  if (!urls.length) return Promise.resolve([]);
+function callFeedsFn(urls) {
   return fetch("/.netlify/functions/feeds", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ urls: urls })
-  }).then(function (res) { return res.json(); })
-    .then(function (data) { return data.items || []; });
+  }).then(function (res) {
+    if (res.status === 404) throw new Error("FEEDS FUNCTION NOT DEPLOYED (404). NETLIFY.TOML + NETLIFY/ FOLDER MUST BE AT REPO ROOT.");
+    if (!res.ok) throw new Error("FEEDS FUNCTION ERROR " + res.status);
+    return res.json();
+  }).then(function (data) { return data.items || []; });
+}
+
+function fetchFeeds() {
+  var urls = document.getElementById("feedsInput").value
+    .split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
+  if (!urls.length) return Promise.resolve([]);
+  return callFeedsFn(urls);
 }
 
 function firmSweep() {
@@ -325,6 +333,9 @@ function fetchFirms() {
         out.push(i);
       });
     });
+    if (out.length === 0 && results[0].status === "rejected") {
+      throw results[0].reason;
+    }
     out.sort(function (a, b) { return (a.date || "") < (b.date || "") ? 1 : -1; });
     return out.slice(0, 20);
   });
@@ -336,6 +347,7 @@ function runScan() {
   btn.disabled = true;
   btn.textContent = "SCANNING\u2026";
   items = [];
+  errors = {};
   scanned = true;
   aiUnavailable = false;
   renderFeed();
@@ -351,7 +363,11 @@ function runScan() {
       items = items.concat(res);
       setStatus(ch, res.length ? "done" : "empty");
       renderFeed();
-    }).catch(function () { setStatus(ch, "error"); renderFeed(); });
+    }).catch(function (err) {
+      errors[ch] = err && err.message ? err.message : "UNKNOWN ERROR";
+      setStatus(ch, "error");
+      renderFeed();
+    });
   }
 
   Promise.allSettled([
@@ -387,6 +403,10 @@ function renderFeed() {
   if (aiUnavailable) {
     html += '<div class="notice">LINKEDIN + AI SWEEP OFFLINE: ADD ANTHROPIC_API_KEY IN NETLIFY TO ENABLE. REDDIT AND FIRM RSS RUN WITHOUT IT.</div>';
   }
+
+  Object.keys(errors).forEach(function (ch) {
+    html += '<div class="notice">' + CHANNELS[ch] + ' \u2715 ' + esc(errors[ch]) + '</div>';
+  });
 
   if (!scanned) {
     html += '<div class="empty"><p class="display">The wire is quiet.</p><p>Run a scan to pull the latest chatter across all three channels.</p></div>';
