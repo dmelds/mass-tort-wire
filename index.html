@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Mass Tort Wire | Signals Desk</title>
 <link rel="manifest" href="/manifest.json">
@@ -37,7 +37,7 @@
   .mono { font-family: 'IBM Plex Mono', Menlo, monospace; }
   .display { font-family: 'Spectral', Georgia, serif; }
 
-  header { border-bottom: 3px double var(--ink); padding: 24px 20px 16px; }
+  header { border-bottom: 3px double var(--ink); padding: calc(24px + env(safe-area-inset-top)) 20px 16px; }
   .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); margin-bottom: 4px; }
   h1 { font-family: 'Spectral', Georgia, serif; font-size: 30px; font-weight: 700; line-height: 1.1; }
   .tagline { color: var(--dim); font-size: 14px; margin-top: 4px; }
@@ -69,9 +69,35 @@
   textarea { resize: vertical; }
   .add-btn { background: none; border: 1px solid var(--ink); padding: 9px 14px; flex-shrink: 0; }
 
-  .filters { border-bottom: 1px solid var(--rule); padding: 8px 20px 0; display: flex; gap: 16px; overflow-x: auto; }
-  .filters button { background: none; border: none; color: var(--dim); padding: 6px 0 8px; border-bottom: 2px solid transparent; white-space: nowrap; }
-  .filters button.active { color: var(--ink); border-bottom-color: var(--amber); }
+  .filters {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    padding: 10px 16px calc(10px + 0px);
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters button {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    color: var(--dim);
+    padding: 12px 16px;
+    min-height: 44px;
+    border-radius: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .filters button.active { color: var(--paper); border-color: transparent; background: var(--ink); }
+  .filters button.active[data-f="reddit"] { background: var(--reddit); }
+  .filters button.active[data-f="linkedin"] { background: var(--linkedin); }
+  .filters button.active[data-f="firms"] { background: var(--firms); }
+  .filters button.active[data-f="trends"] { background: var(--trends); }
 
   main { padding: 16px 20px 40px; }
   .empty { text-align: center; padding: 64px 20px; }
