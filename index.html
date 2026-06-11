@@ -245,57 +245,90 @@ function setStatus(ch, s) {
   document.getElementById("st-" + ch).textContent = map[s] || "";
 }
 
-// ── Reddit (public JSON API, fetched directly from the browser) ──
-function fetchReddit(subs) {
+// ── Reddit: three attempts in order ──
+// 1) direct browser fetch of reddit's JSON API
+// 2) reddit's RSS endpoints via the Netlify feeds function
+// 3) reddit's JSON API via a public CORS relay (different IPs than Netlify)
+function redditJsonUrls(subs) {
   var scoped = subs.length > 0;
   var base = scoped
     ? "https://www.reddit.com/r/" + subs.join("+") + "/search.json"
     : "https://www.reddit.com/search.json";
-  var queries = topics.slice(0, 4).map(function (q) {
+  var urls = topics.slice(0, 4).map(function (q) {
     return base + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : "");
   });
   // Pinned: always check r/law for new posts with "lawsuit" in the title
-  queries.push("https://www.reddit.com/r/law/search.json?q=" + encodeURIComponent("title:lawsuit") + "&sort=new&t=month&limit=8&restrict_sr=1");
-  return Promise.allSettled(queries.map(function (u) {
-    return fetch(u).then(function (r) { return r.json(); });
-  })).then(function (results) {
-    var seen = {}, out = [];
-    results.forEach(function (r) {
-      if (r.status !== "fulfilled" || !r.value || !r.value.data) return;
-      (r.value.data.children || []).forEach(function (c) {
-        var d = c.data;
-        if (!d || seen[d.id]) return;
-        seen[d.id] = true;
-        out.push({
-          channel: "reddit",
-          title: d.title,
-          source: "r/" + d.subreddit,
-          url: "https://www.reddit.com" + d.permalink,
-          date: new Date(d.created_utc * 1000).toISOString().slice(0, 10),
-          meta: d.score + " pts \u00B7 " + d.num_comments + " comments",
-          summary: d.selftext ? d.selftext.slice(0, 220) : ""
-        });
+  urls.push("https://www.reddit.com/r/law/search.json?q=" + encodeURIComponent("title:lawsuit") + "&sort=new&t=month&limit=8&restrict_sr=1");
+  return urls;
+}
+
+function parseRedditResults(results) {
+  var seen = {}, out = [];
+  results.forEach(function (r) {
+    if (r.status !== "fulfilled" || !r.value || !r.value.data) return;
+    (r.value.data.children || []).forEach(function (c) {
+      var d = c.data;
+      if (!d || seen[d.id]) return;
+      seen[d.id] = true;
+      out.push({
+        channel: "reddit",
+        title: d.title,
+        source: "r/" + d.subreddit,
+        url: "https://www.reddit.com" + d.permalink,
+        date: new Date(d.created_utc * 1000).toISOString().slice(0, 10),
+        meta: d.score + " pts \u00B7 " + d.num_comments + " comments",
+        summary: d.selftext ? d.selftext.slice(0, 220) : ""
       });
     });
-    out.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
-    if (out.length > 0) return out.slice(0, 18);
-    // Direct fetch blocked or empty: fall back to Reddit's RSS endpoints
-    // through the feeds function (server-side, no CORS).
-    var rssUrls = topics.slice(0, 4).map(function (q) {
-      return (scoped
-        ? "https://www.reddit.com/r/" + subs.join("+") + "/search.rss"
-        : "https://www.reddit.com/search.rss")
-        + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : "");
-    });
-    rssUrls.push("https://www.reddit.com/r/law/search.rss?q=" + encodeURIComponent("title:lawsuit") + "&sort=new&t=month&limit=8&restrict_sr=1");
-    return callFeedsFn(rssUrls).then(function (arr) {
-      return arr.map(function (i) {
-        i.channel = "reddit"; i.meta = ""; return i;
-      }).slice(0, 18);
-    }).catch(function (err) {
-      throw new Error("REDDIT BLOCKED IN BROWSER; FALLBACK FAILED: " + err.message);
-    });
   });
+  out.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+  return out.slice(0, 18);
+}
+
+function redditDirect(urls) {
+  return Promise.allSettled(urls.map(function (u) {
+    return fetch(u).then(function (r) { return r.json(); });
+  })).then(parseRedditResults);
+}
+
+function redditViaRelay(urls) {
+  return Promise.allSettled(urls.map(function (u) {
+    return fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(u))
+      .then(function (r) { return r.json(); });
+  })).then(parseRedditResults);
+}
+
+function redditViaRss(subs) {
+  var scoped = subs.length > 0;
+  var rssUrls = topics.slice(0, 4).map(function (q) {
+    return (scoped
+      ? "https://www.reddit.com/r/" + subs.join("+") + "/search.rss"
+      : "https://www.reddit.com/search.rss")
+      + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : "");
+  });
+  rssUrls.push("https://www.reddit.com/r/law/search.rss?q=" + encodeURIComponent("title:lawsuit") + "&sort=new&t=month&limit=8&restrict_sr=1");
+  return callFeedsFn(rssUrls).then(function (arr) {
+    return arr.map(function (i) {
+      i.channel = "reddit"; i.meta = ""; return i;
+    }).slice(0, 18);
+  });
+}
+
+function fetchReddit(subs) {
+  var urls = redditJsonUrls(subs);
+  return redditDirect(urls)
+    .then(function (out) {
+      if (out.length) return out;
+      return redditViaRss(subs).catch(function () { return []; });
+    })
+    .then(function (out) {
+      if (out.length) return out;
+      return redditViaRelay(urls);
+    })
+    .then(function (out) {
+      if (!out.length) throw new Error("REDDIT BLOCKED ALL THREE PATHS (DIRECT, NETLIFY RSS, RELAY). USUALLY TEMPORARY; RE-SCAN IN A FEW MINUTES.");
+      return out;
+    });
 }
 
 // ── LinkedIn + Firm Wire via Netlify Function (server-side Claude call) ──
@@ -306,6 +339,8 @@ function askClaude(prompt) {
     body: JSON.stringify({ prompt: prompt })
   }).then(function (res) {
     if (res.status === 503) { aiUnavailable = true; return []; }
+    if (res.status === 404) throw new Error("SCAN FUNCTION NOT DEPLOYED (404). CHECK NETLIFY/FUNCTIONS/SCAN.JS EXISTS IN THE REPO.");
+    if (!res.ok) throw new Error("SCAN FUNCTION ERROR " + res.status);
     return res.json().then(function (data) {
       var clean = (data.text || "").replace(/```json|```/g, "").trim();
       var s = clean.indexOf("["), e = clean.lastIndexOf("]");
