@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Mass Tort Wire | Signals Desk</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wire">
+<meta name="theme-color" content="#16211C">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,500;0,700;1,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #16211C;
+    --paper: #FCFBF7;
+    --rule: #D8D4C8;
+    --amber: #B07F2E;
+    --dim: #6E6A5E;
+    --panel: #F4F1E8;
+    --news: #2E5E7E;
+    --firms: #3E6B4F;
+    --bad: #A2412A;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  header { border-bottom: 3px double var(--ink); padding: calc(24px + env(safe-area-inset-top)) 20px 16px; }
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); margin-bottom: 4px; }
+  h1 { font-family: 'Spectral', Georgia, serif; font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .tagline { color: var(--dim); font-size: 14px; margin-top: 4px; }
+
+  .controls { border-bottom: 1px solid var(--rule); padding: 12px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  button, select { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  #scanBtn { background: var(--ink); color: var(--paper); border: none; padding: 10px 18px; }
+  #scanBtn:disabled { background: var(--dim); }
+  .ghost { background: none; color: var(--dim); border: 1px solid var(--rule); padding: 9px 12px; }
+  .ghost.on { color: var(--paper); background: var(--amber); border-color: var(--amber); }
+  select.ghost { appearance: none; -webkit-appearance: none; border-radius: 0; }
+  .channel-status { margin-left: auto; display: flex; gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .channel-status .news { color: var(--news); }
+  .channel-status .firms { color: var(--firms); }
+
+  #config { display: none; border-bottom: 1px solid var(--rule); background: var(--panel); padding: 16px 20px; }
+  #config.open { display: block; }
+  .label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); margin: 16px 0 8px; }
+  .label:first-child { margin-top: 0; }
+  .hint { font-size: 12px; color: var(--dim); margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1px solid var(--ink); font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 5px 8px; display: inline-flex; align-items: center; gap: 8px; }
+  .chip button { border: none; background: none; color: var(--dim); font-size: 12px; padding: 0; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  input[type=text], textarea {
+    border: 1px solid var(--rule); background: var(--paper);
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    padding: 9px 12px; width: 100%;
+  }
+  textarea { resize: vertical; }
+  .add-btn { background: none; border: 1px solid var(--ink); padding: 9px 14px; flex-shrink: 0; }
+  .config-foot { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+  .health { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .health td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--rule); vertical-align: top; word-break: break-word; }
+  .health .ok { color: var(--firms); }
+  .health .empty { color: var(--dim); }
+  .health .error { color: var(--bad); }
+
+  .filters {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    padding: 10px 16px;
+    display: flex; gap: 8px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters button {
+    background: var(--paper); border: 1px solid var(--rule); color: var(--dim);
+    padding: 12px 16px; min-height: 44px; border-radius: 2px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .filters button.active { color: var(--paper); border-color: transparent; background: var(--ink); }
+  .filters button.active[data-f="news"] { background: var(--news); }
+  .filters button.active[data-f="firms"] { background: var(--firms); }
+
+  main { padding: 16px 20px 40px; }
+  .empty-state { text-align: center; padding: 64px 20px; }
+  .empty-state .display { font-family: 'Spectral', Georgia, serif; font-size: 20px; font-style: italic; margin-bottom: 8px; }
+  .empty-state p { color: var(--dim); font-size: 14px; }
+  .notice { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); padding: 12px 0; border-bottom: 1px solid var(--rule); line-height: 1.5; }
+  .notice.bad { color: var(--bad); }
+
+  .item { display: block; padding: 12px 0 12px 12px; border-bottom: 1px solid var(--rule); border-left: 3px solid var(--rule); text-decoration: none; color: var(--ink); }
+  .item:active { background: var(--panel); }
+  .item.news { border-left-color: var(--news); }
+  .item.firms { border-left-color: var(--firms); }
+  .item .src { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; margin-bottom: 4px; }
+  .item.news .src { color: var(--news); }
+  .item.firms .src { color: var(--firms); }
+  .item .new { background: var(--amber); color: var(--paper); padding: 1px 5px; margin-left: 6px; letter-spacing: 0.1em; }
+  .item .title { font-family: 'Spectral', Georgia, serif; font-size: 16px; font-weight: 600; line-height: 1.3; }
+  .item .sum { color: var(--dim); font-size: 13px; line-height: 1.4; margin-top: 4px; }
+  .item .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .item .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); border: 1px solid var(--rule); padding: 2px 6px; }
+  .item .tag.firm { color: var(--firms); border-color: var(--firms); }
+
+  footer { border-top: 1px solid var(--rule); padding: 16px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">SIGNALS DESK &middot; <span id="today"></span></div>
+  <h1>Mass Tort Wire</h1>
+  <p class="tagline">Mass tort news and what plaintiff firms are publishing.</p>
+</header>
+
+<div class="controls">
+  <button id="scanBtn">RUN SCAN</button>
+  <button id="configBtn" class="ghost">EDIT SOURCES</button>
+  <select id="windowSel" class="ghost" aria-label="Time window">
+    <option value="7">LAST 7 DAYS</option>
+    <option value="30">LAST 30 DAYS</option>
+  </select>
+  <button id="topicsOnlyBtn" class="ghost" aria-pressed="false">MY TOPICS ONLY</button>
+  <div class="channel-status">
+    <span class="news">NEWS <span id="st-news"></span></span>
+    <span class="firms">FIRMS <span id="st-firms"></span></span>
+  </div>
+</div>
+
+<div id="config">
+  <div class="label">TRACKED TOPICS</div>
+  <div class="chips" id="topicChips"></div>
+  <div class="row">
+    <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit">
+    <button class="add-btn" id="addTopic">ADD</button>
+  </div>
+  <p class="hint">Each topic runs as a Google News search for the News Wire, up to 12. Topics also tag matching Firm Wire posts.</p>
+
+  <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
+  <textarea id="outletsInput" rows="3"></textarea>
+  <p class="hint">Each outlet runs one Google News search limited to that site. Leave blank to turn this off.</p>
+
+  <div class="label">BLOCKED SOURCES (ONE PER LINE)</div>
+  <textarea id="blockedInput" rows="2"></textarea>
+  <p class="hint">A publisher name as shown on items, or a domain. Applies to both channels.</p>
+
+  <div class="label">NEWS SITE FEEDS (ONE PER LINE)</div>
+  <textarea id="newsFeedsInput" rows="3"></textarea>
+
+  <div class="label">FIRMS TO WATCH (ONE PER LINE)</div>
+  <textarea id="firmWatchInput" rows="6"></textarea>
+  <p class="hint">Each firm runs a Google News search for its exact name: verdicts, filings, appointments, press.</p>
+
+  <div class="label">FIRM FEEDS (ONE PER LINE)</div>
+  <textarea id="firmFeedsInput" rows="5"></textarea>
+  <p class="hint">A blog page URL works if the page lists its feed. Settings save on this device.</p>
+
+  <div class="label">SOURCE HEALTH (LAST SCAN)</div>
+  <div id="healthBox"><p class="hint">Run a scan to see which sources respond.</p></div>
+
+  <div class="config-foot">
+    <button class="ghost" id="resetBtn">RESET TO DEFAULTS</button>
+  </div>
+</div>
+
+<div class="filters">
+  <button data-f="all" class="active">ALL (<span id="ct-all">0</span>)</button>
+  <button data-f="news">NEWS WIRE (<span id="ct-news">0</span>)</button>
+  <button data-f="firms">FIRM WIRE (<span id="ct-firms">0</span>)</button>
+</div>
+
+<main id="feed"></main>
+
+<footer>
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; NO API KEYS &middot; SETTINGS SAVED ON THIS DEVICE
+</footer>
+
+<script>
+// ── Defaults ──
+var DEFAULTS = {
+  topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
+  outlets: ["reuters.com", "law360.com", "yahoo.com"],
+  blockedSources: ["Yahoo Sports", "sports.yahoo.com"],
+  newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
+  firmWatch: [
+    "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
+    "Lieff Cabraser", "Seeger Weiss", "Levin Papantonio", "Sokolove Law", "Gori Law"
+  ],
+  firmFeeds: [
+    "https://www.sokolovelaw.com/blog/",
+    "https://gorilaw.com/blog/",
+    "https://www.lawsuit-information-center.com/"
+  ],
+  windowDays: 7,
+  topicsOnly: false
+};
+var STORE_KEY = "mtw:settings:v2";
+var SEEN_KEY = "mtw:seen:v2";
+var BATCH = 12;               // feeds function limit per call
+var CHANNELS = { news: "NEWS WIRE", firms: "FIRM WIRE" };
+var OUTLET_NAMES = { "reuters.com": "Reuters", "law360.com": "Law360", "yahoo.com": "Yahoo News" };
+
+// ── Storage (guarded: private browsing can refuse it) ──
+function load(key, fallback) {
+  try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return fallback; }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
+}
+
+var settings = Object.assign({}, DEFAULTS, load(STORE_KEY, {}));
+var seenBefore = load(SEEN_KEY, null);   // null on first visit: no NEW badges
+var items = [];
+var errors = {};
+var health = { news: [], firms: [] };
+var filter = "all";
+var scanned = false;
+var scanning = false;
+
+function persist() { save(STORE_KEY, settings); }
+
+// ── Settings UI ──
+document.getElementById("today").textContent = new Date().toISOString().slice(0, 10);
+
+function linesOf(id) {
+  return document.getElementById(id).value
+    .split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
+}
+
+function readOutlets() {
+  return linesOf("outletsInput").map(function (d) {
+    return d.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").toLowerCase();
+  }).filter(Boolean);
+}
+
+function fillInputs() {
+  document.getElementById("outletsInput").value = settings.outlets.join("\n");
+  document.getElementById("blockedInput").value = settings.blockedSources.join("\n");
+  document.getElementById("newsFeedsInput").value = settings.newsFeeds.join("\n");
+  document.getElementById("firmWatchInput").value = settings.firmWatch.join("\n");
+  document.getElementById("firmFeedsInput").value = settings.firmFeeds.join("\n");
+  document.getElementById("windowSel").value = String(settings.windowDays);
+  var tb = document.getElementById("topicsOnlyBtn");
+  tb.classList.toggle("on", settings.topicsOnly);
+  tb.setAttribute("aria-pressed", settings.topicsOnly ? "true" : "false");
+  renderChips();
+}
+
+function renderChips() {
+  var el = document.getElementById("topicChips");
+  el.innerHTML = "";
+  settings.topics.forEach(function (t) {
+    var chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = t + " ";
+    var x = document.createElement("button");
+    x.textContent = "\u2715";
+    x.setAttribute("aria-label", "Remove " + t);
+    x.onclick = function () {
+      settings.topics = settings.topics.filter(function (v) { return v !== t; });
+      persist(); renderChips();
+    };
+    chip.appendChild(x);
+    el.appendChild(chip);
+  });
+}
+
+function addTopic() {
+  var inp = document.getElementById("topicInput");
+  var t = inp.value.trim();
+  var exists = settings.topics.some(function (v) { return v.toLowerCase() === t.toLowerCase(); });
+  if (t && !exists) { settings.topics.push(t); persist(); renderChips(); }
+  inp.value = "";
+}
+document.getElementById("addTopic").onclick = addTopic;
+document.getElementById("topicInput").addEventListener("keydown", function (e) { if (e.key === "Enter") addTopic(); });
+
+document.getElementById("newsFeedsInput").addEventListener("change", function () {
+  settings.newsFeeds = linesOf("newsFeedsInput"); persist();
+});
+document.getElementById("blockedInput").addEventListener("change", function () {
+  settings.blockedSources = linesOf("blockedInput"); persist();
+});
+document.getElementById("outletsInput").addEventListener("change", function () {
+  settings.outlets = readOutlets(); persist();
+});
+document.getElementById("firmWatchInput").addEventListener("change", function () {
+  settings.firmWatch = linesOf("firmWatchInput"); persist();
+});
+document.getElementById("firmFeedsInput").addEventListener("change", function () {
+  settings.firmFeeds = linesOf("firmFeedsInput"); persist();
+});
+
+document.getElementById("windowSel").onchange = function () {
+  settings.windowDays = Number(this.value) || 7;
+  persist();
+  runScan();   // the window changes what the news searches ask for
+};
+
+document.getElementById("topicsOnlyBtn").onclick = function () {
+  settings.topicsOnly = !settings.topicsOnly;
+  persist(); fillInputs(); renderFeed();
+};
+
+document.getElementById("configBtn").onclick = function () {
+  var c = document.getElementById("config");
+  c.classList.toggle("open");
+  this.textContent = c.classList.contains("open") ? "HIDE SOURCES" : "EDIT SOURCES";
+};
+
+document.getElementById("resetBtn").onclick = function () {
+  if (!confirm("Reset topics and feeds to the defaults?")) return;
+  settings = JSON.parse(JSON.stringify(DEFAULTS));
+  persist(); fillInputs();
+};
+
+// ── Filters ──
+document.querySelectorAll(".filters button").forEach(function (b) {
+  b.onclick = function () {
+    filter = b.dataset.f;
+    document.querySelectorAll(".filters button").forEach(function (x) { x.classList.remove("active"); });
+    b.classList.add("active");
+    renderFeed();
+  };
+});
+
+function setStatus(ch, s) {
+  var map = { scanning: "\u2026", done: "\u2713", empty: "0", error: "\u2715" };
+  document.getElementById("st-" + ch).textContent = map[s] || "";
+}
+
+// ── Fetching ──
+function fetchT(url, opts, ms) {
+  var ctrl = new AbortController();
+  var timer = setTimeout(function () { ctrl.abort(); }, ms || 15000);
+  opts = opts || {};
+  opts.signal = ctrl.signal;
+  return fetch(url, opts).finally(function () { clearTimeout(timer); });
+}
+
+function callFeeds(entries, perFeed) {
+  return fetchT("/.netlify/functions/feeds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      urls: entries,
+      topics: settings.topics,
+      days: settings.windowDays,
+      perFeed: perFeed,
+      blockSources: settings.blockedSources
+    })
+  }, 20000).then(function (res) {
+    if (res.status === 404) throw new Error("FEEDS FUNCTION NOT DEPLOYED (404). NETLIFY/FUNCTIONS/FEEDS.JS MUST BE IN THE REPO.");
+    if (!res.ok) throw new Error("FEEDS FUNCTION ERROR " + res.status);
+    return res.json();
+  }).then(function (data) {
+    return { items: data.items || [], feeds: data.feeds || [] };
+  }).catch(function (err) {
+    if (err && err.name === "AbortError") throw new Error("FEEDS FUNCTION TIMED OUT.");
+    throw err;
+  });
+}
+
+// Split into batches of 12 and merge, dropping duplicates across batches.
+function runBatches(entries, perFeed) {
+  if (!entries.length) return Promise.resolve({ items: [], feeds: [] });
+  var batches = [];
+  for (var i = 0; i < entries.length; i += BATCH) batches.push(entries.slice(i, i + BATCH));
+  return Promise.allSettled(batches.map(function (b) { return callFeeds(b, perFeed); }))
+    .then(function (results) {
+      var ok = results.filter(function (r) { return r.status === "fulfilled"; });
+      if (!ok.length) throw results[0].reason;
+      var seen = {}, out = { items: [], feeds: [] };
+      ok.forEach(function (r) {
+        out.feeds = out.feeds.concat(r.value.feeds);
+        r.value.items.forEach(function (it) {
+          var k = it.url;
+          if (seen[k]) return;
+          seen[k] = true;
+          out.items.push(it);
+        });
+      });
+      return out;
+    });
+}
+
+function whenClause() {
+  return settings.windowDays <= 7 ? " when:7d" : "";
+}
+
+function gnews(q) {
+  return "https://news.google.com/rss/search?q=" + encodeURIComponent(q) + "&hl=en-US&gl=US&ceid=US:en";
+}
+
+function googleNewsUrl(topic) {
+  return gnews(topic + whenClause());
+}
+
+// Same trimming the server uses for tagging: "Roundup settlement" -> "Roundup"
+function coreTerm(t) {
+  return t.replace(/\b(lawsuits?|litigation|settlements?|claims?|mdl|class action|verdicts?)\b/gi, " ")
+    .replace(/\s+/g, " ").trim() || t;
+}
+
+// Outlet searches pair your topic terms with a legal word, so a bare term like
+// "Roundup" can't match sports roundups. Yahoo's sports section is excluded outright.
+var LEGAL_CONTEXT = "(lawsuit OR lawsuits OR litigation OR settlement OR verdict OR MDL OR court OR jury)";
+var OUTLET_EXCLUDES = { "yahoo.com": " -site:sports.yahoo.com" };
+
+function outletSearches() {
+  var terms = settings.topics.map(coreTerm).filter(Boolean)
+    .map(function (t) { return '"' + t.replace(/"/g, "") + '"'; });
+  if (!terms.length) return [];
+  return settings.outlets.map(function (d) {
+    return {
+      url: gnews("site:" + d + " (" + terms.join(" OR ") + ") " + LEGAL_CONTEXT + (OUTLET_EXCLUDES[d] || "") + whenClause()),
+      label: (OUTLET_NAMES[d] || d) + " (site search)"
+    };
+  });
+}
+
+function firmSearches() {
+  return settings.firmWatch.map(function (name) {
+    return { url: gnews('"' + name.replace(/"/g, "") + '"' + whenClause()), watch: name };
+  });
+}
+
+function fetchNews() {
+  var searches = settings.topics.slice(0, 12).map(function (t) {
+    return { url: googleNewsUrl(t), topic: t };
+  });
+  return Promise.allSettled([
+    runBatches(searches, 10),
+    runBatches(settings.newsFeeds, 8),
+    runBatches(outletSearches(), 10)
+  ])
+    .then(function (results) { return mergeChannel(results, "news"); });
+}
+
+function fetchFirms() {
+  return Promise.allSettled([runBatches(settings.firmFeeds, 8), runBatches(firmSearches(), 6)])
+    .then(function (results) { return mergeChannel(results, "firms"); });
+}
+
+function mergeChannel(results, ch) {
+  var ok = results.filter(function (r) { return r.status === "fulfilled"; });
+  if (!ok.length) throw results[0].reason;
+  var seen = {}, out = [], feeds = [];
+  ok.forEach(function (r) {
+    feeds = feeds.concat(r.value.feeds);
+    r.value.items.forEach(function (it) {
+      if (seen[it.url]) return;
+      seen[it.url] = true;
+      it.channel = ch;
+      out.push(it);
+    });
+  });
+  health[ch] = feeds;
+  return out;
+}
+
+// ── Scan ──
+function runScan() {
+  if (scanning) return;
+  scanning = true;
+  settings.outlets = readOutlets();
+  settings.blockedSources = linesOf("blockedInput");
+  settings.newsFeeds = linesOf("newsFeedsInput");
+  settings.firmWatch = linesOf("firmWatchInput");
+  settings.firmFeeds = linesOf("firmFeedsInput");
+  persist();
+
+  var btn = document.getElementById("scanBtn");
+  btn.disabled = true;
+  btn.textContent = "SCANNING\u2026";
+  items = [];
+  errors = {};
+  health = { news: [], firms: [] };
+  scanned = true;
+  renderFeed();
+  renderHealth();
+  ["news", "firms"].forEach(function (ch) { setStatus(ch, "scanning"); });
+
+  function run(ch, fn) {
+    return fn().then(function (res) {
+      items = items.concat(res);
+      setStatus(ch, res.length ? "done" : "empty");
+    }).catch(function (err) {
+      errors[ch] = err && err.message ? err.message : "UNKNOWN ERROR";
+      setStatus(ch, "error");
+    }).then(function () {
+      renderFeed();
+      renderHealth();
+    });
+  }
+
+  Promise.allSettled([run("news", fetchNews), run("firms", fetchFirms)]).then(function () {
+    // Remember everything shown so the next visit can mark what's new.
+    var keys = items.map(function (i) { return i.url; });
+    var prior = seenBefore || [];
+    save(SEEN_KEY, keys.concat(prior.filter(function (k) { return keys.indexOf(k) === -1; })).slice(0, 600));
+    scanning = false;
+    btn.disabled = false;
+    btn.textContent = "RUN SCAN";
+  });
+}
+
+document.getElementById("scanBtn").onclick = runScan;
+
+// ── Render ──
+function esc(s) {
+  var d = document.createElement("div");
+  d.textContent = s == null ? "" : String(s);
+  return d.innerHTML;
+}
+
+function isNew(item) {
+  return seenBefore !== null && seenBefore.indexOf(item.url) === -1;
+}
+
+function sortItems(list) {
+  return list.slice().sort(function (a, b) {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return b.date.localeCompare(a.date);
+  });
+}
+
+function renderHealth() {
+  var box = document.getElementById("healthBox");
+  var rows = [];
+  ["news", "firms"].forEach(function (ch) {
+    health[ch].forEach(function (f) {
+      var note = f.status === "error" ? f.error
+        : f.status === "empty" ? (f.blocked ? "all " + f.blocked + " blocked" : "nothing in window")
+        : f.found + " in window" + (f.count < f.found ? " (" + (f.found - f.count) + " duplicate)" : "")
+          + (f.blocked ? ", " + f.blocked + " blocked" : "");
+      var where = f.resolved && f.resolved !== f.url ? " \u2192 " + f.resolved : "";
+      rows.push('<tr><td>' + CHANNELS[ch] + '</td><td>' + esc(f.source) +
+        (f.search ? "" : '<br><span class="empty">' + esc(f.url + where) + '</span>') +
+        '</td><td class="' + esc(f.status) + '">' + esc(f.status.toUpperCase()) + '<br>' + esc(note) + '</td></tr>');
+    });
+  });
+  box.innerHTML = rows.length
+    ? '<table class="health">' + rows.join("") + '</table>'
+    : '<p class="hint">' + (scanning ? "Scanning\u2026" : "Run a scan to see which sources respond.") + '</p>';
+}
+
+function renderFeed() {
+  var pool = settings.topicsOnly
+    ? items.filter(function (i) { return i.matched && i.matched.length; })
+    : items;
+
+  document.getElementById("ct-all").textContent = pool.length;
+  ["news", "firms"].forEach(function (ch) {
+    document.getElementById("ct-" + ch).textContent = pool.filter(function (i) { return i.channel === ch; }).length;
+  });
+
+  var visible = sortItems(filter === "all" ? pool : pool.filter(function (i) { return i.channel === filter; }));
+  var html = "";
+
+  Object.keys(errors).forEach(function (ch) {
+    html += '<div class="notice bad">' + CHANNELS[ch] + ' \u2715 ' + esc(errors[ch]) + '</div>';
+  });
+
+  ["news", "firms"].forEach(function (ch) {
+    var failed = health[ch].filter(function (f) { return f.status === "error"; });
+    if (!failed.length) return;
+    html += '<div class="notice">' + CHANNELS[ch] + ': ' + failed.length + ' OF ' + health[ch].length +
+      ' SOURCES FAILED \u00B7 ' + failed.map(function (f) { return esc(f.source) + ' (' + esc(f.error) + ')'; }).join(', ') +
+      ' \u00B7 SEE EDIT SOURCES</div>';
+  });
+
+  var newCount = visible.filter(isNew).length;
+  if (scanned && newCount) {
+    html += '<div class="notice">' + newCount + ' NEW SINCE YOUR LAST SCAN</div>';
+  }
+
+  if (!scanned) {
+    html += '<div class="empty-state"><p class="display">The wire is quiet.</p><p>Run a scan to pull the latest news and firm posts.</p></div>';
+  } else if (!visible.length && !scanning) {
+    html += '<div class="notice">' + (settings.topicsOnly ? "NOTHING MATCHES YOUR TOPICS IN THIS WINDOW." : "NO ITEMS IN THIS WINDOW.") + '</div>';
+  }
+
+  visible.forEach(function (item) {
+    var tags = (item.watch || []).map(function (t) { return '<span class="tag firm">' + esc(t) + '</span>'; }).join("")
+      + (item.matched || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join("");
+    html += '<a class="item ' + esc(item.channel) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
+      + '<div class="src">' + CHANNELS[item.channel] + ' \u00B7 ' + esc(item.source || "\u2014")
+      + (item.date ? ' \u00B7 ' + esc(item.date) : '')
+      + (isNew(item) ? '<span class="new">NEW</span>' : '') + '</div>'
+      + '<div class="title">' + esc(item.title) + '</div>'
+      + (item.summary ? '<p class="sum">' + esc(item.summary) + '</p>' : '')
+      + (tags ? '<div class="tags">' + tags + '</div>' : '')
+      + '</a>';
+  });
+
+  document.getElementById("feed").innerHTML = html;
+}
+
+// ── Start ──
+fillInputs();
+renderFeed();
+window.addEventListener("load", runScan);
+</script>
+</body>
+</html>
