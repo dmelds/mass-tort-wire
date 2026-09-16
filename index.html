@@ -111,6 +111,7 @@
   .item .sum { color: var(--dim); font-size: 13px; line-height: 1.4; margin-top: 4px; }
   .item .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .item .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); border: 1px solid var(--rule); padding: 2px 6px; }
+  .item .tag.firm { color: var(--firms); border-color: var(--firms); }
 
   footer { border-top: 1px solid var(--rule); padding: 16px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); line-height: 1.6; }
 </style>
@@ -146,8 +147,16 @@
   </div>
   <p class="hint">Each topic runs as a Google News search for the News Wire, up to 12. Topics also tag matching Firm Wire posts.</p>
 
+  <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
+  <textarea id="outletsInput" rows="3"></textarea>
+  <p class="hint">Each outlet runs one Google News search limited to that site. Leave blank to turn this off.</p>
+
   <div class="label">NEWS SITE FEEDS (ONE PER LINE)</div>
   <textarea id="newsFeedsInput" rows="3"></textarea>
+
+  <div class="label">FIRMS TO WATCH (ONE PER LINE)</div>
+  <textarea id="firmWatchInput" rows="6"></textarea>
+  <p class="hint">Each firm runs a Google News search for its exact name: verdicts, filings, appointments, press.</p>
 
   <div class="label">FIRM FEEDS (ONE PER LINE)</div>
   <textarea id="firmFeedsInput" rows="5"></textarea>
@@ -170,14 +179,19 @@
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: GOOGLE NEWS SEARCH + NEWS SITE RSS &middot; FIRM WIRE: FIRM RSS &middot; NO API KEYS &middot; SETTINGS SAVED ON THIS DEVICE
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; NO API KEYS &middot; SETTINGS SAVED ON THIS DEVICE
 </footer>
 
 <script>
 // ── Defaults ──
 var DEFAULTS = {
   topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
+  outlets: ["reuters.com", "law360.com", "yahoo.com"],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
+  firmWatch: [
+    "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
+    "Lieff Cabraser", "Seeger Weiss", "Levin Papantonio", "Sokolove Law", "Gori Law"
+  ],
   firmFeeds: [
     "https://www.sokolovelaw.com/blog/",
     "https://gorilaw.com/blog/",
@@ -190,6 +204,7 @@ var STORE_KEY = "mtw:settings:v2";
 var SEEN_KEY = "mtw:seen:v2";
 var BATCH = 12;               // feeds function limit per call
 var CHANNELS = { news: "NEWS WIRE", firms: "FIRM WIRE" };
+var OUTLET_NAMES = { "reuters.com": "Reuters", "law360.com": "Law360", "yahoo.com": "Yahoo News" };
 
 // ── Storage (guarded: private browsing can refuse it) ──
 function load(key, fallback) {
@@ -219,8 +234,16 @@ function linesOf(id) {
     .split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
 }
 
+function readOutlets() {
+  return linesOf("outletsInput").map(function (d) {
+    return d.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").toLowerCase();
+  }).filter(Boolean);
+}
+
 function fillInputs() {
+  document.getElementById("outletsInput").value = settings.outlets.join("\n");
   document.getElementById("newsFeedsInput").value = settings.newsFeeds.join("\n");
+  document.getElementById("firmWatchInput").value = settings.firmWatch.join("\n");
   document.getElementById("firmFeedsInput").value = settings.firmFeeds.join("\n");
   document.getElementById("windowSel").value = String(settings.windowDays);
   var tb = document.getElementById("topicsOnlyBtn");
@@ -260,6 +283,12 @@ document.getElementById("topicInput").addEventListener("keydown", function (e) {
 
 document.getElementById("newsFeedsInput").addEventListener("change", function () {
   settings.newsFeeds = linesOf("newsFeedsInput"); persist();
+});
+document.getElementById("outletsInput").addEventListener("change", function () {
+  settings.outlets = readOutlets(); persist();
+});
+document.getElementById("firmWatchInput").addEventListener("change", function () {
+  settings.firmWatch = linesOf("firmWatchInput"); persist();
 });
 document.getElementById("firmFeedsInput").addEventListener("change", function () {
   settings.firmFeeds = linesOf("firmFeedsInput"); persist();
@@ -357,22 +386,57 @@ function runBatches(entries, perFeed) {
     });
 }
 
-function googleNewsUrl(topic) {
-  var q = topic + (settings.windowDays <= 7 ? " when:7d" : "");
+function whenClause() {
+  return settings.windowDays <= 7 ? " when:7d" : "";
+}
+
+function gnews(q) {
   return "https://news.google.com/rss/search?q=" + encodeURIComponent(q) + "&hl=en-US&gl=US&ceid=US:en";
+}
+
+function googleNewsUrl(topic) {
+  return gnews(topic + whenClause());
+}
+
+// Same trimming the server uses for tagging: "Roundup settlement" -> "Roundup"
+function coreTerm(t) {
+  return t.replace(/\b(lawsuits?|litigation|settlements?|claims?|mdl|class action|verdicts?)\b/gi, " ")
+    .replace(/\s+/g, " ").trim() || t;
+}
+
+function outletSearches() {
+  var terms = settings.topics.map(coreTerm).filter(Boolean)
+    .map(function (t) { return '"' + t.replace(/"/g, "") + '"'; });
+  if (!terms.length) return [];
+  return settings.outlets.map(function (d) {
+    return {
+      url: gnews("site:" + d + " (" + terms.join(" OR ") + ")" + whenClause()),
+      label: (OUTLET_NAMES[d] || d) + " (site search)"
+    };
+  });
+}
+
+function firmSearches() {
+  return settings.firmWatch.map(function (name) {
+    return { url: gnews('"' + name.replace(/"/g, "") + '"' + whenClause()), watch: name };
+  });
 }
 
 function fetchNews() {
   var searches = settings.topics.slice(0, 12).map(function (t) {
     return { url: googleNewsUrl(t), topic: t };
   });
-  return Promise.allSettled([runBatches(searches, 10), runBatches(settings.newsFeeds, 8)])
+  return Promise.allSettled([
+    runBatches(searches, 10),
+    runBatches(settings.newsFeeds, 8),
+    runBatches(outletSearches(), 10)
+  ])
     .then(function (results) { return mergeChannel(results, "news"); });
 }
 
 function fetchFirms() {
-  return runBatches(settings.firmFeeds, 8)
-    .then(function (r) { return mergeChannel([{ status: "fulfilled", value: r }], "firms"); });
+  return Promise.allSettled([runBatches(settings.firmFeeds, 8), runBatches(firmSearches(), 6)])
+    .then(function (results) { return mergeChannel(results, "firms"); });
 }
 
 function mergeChannel(results, ch) {
@@ -396,7 +460,9 @@ function mergeChannel(results, ch) {
 function runScan() {
   if (scanning) return;
   scanning = true;
+  settings.outlets = readOutlets();
   settings.newsFeeds = linesOf("newsFeedsInput");
+  settings.firmWatch = linesOf("firmWatchInput");
   settings.firmFeeds = linesOf("firmFeedsInput");
   persist();
 
@@ -467,7 +533,7 @@ function renderHealth() {
         : f.found + " in window" + (f.count < f.found ? " (" + (f.found - f.count) + " duplicate)" : "");
       var where = f.resolved && f.resolved !== f.url ? " \u2192 " + f.resolved : "";
       rows.push('<tr><td>' + CHANNELS[ch] + '</td><td>' + esc(f.source) +
-        (f.topic ? "" : '<br><span class="empty">' + esc(f.url + where) + '</span>') +
+        (f.search ? "" : '<br><span class="empty">' + esc(f.url + where) + '</span>') +
         '</td><td class="' + esc(f.status) + '">' + esc(f.status.toUpperCase()) + '<br>' + esc(note) + '</td></tr>');
     });
   });
@@ -513,7 +579,8 @@ function renderFeed() {
   }
 
   visible.forEach(function (item) {
-    var tags = (item.matched || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join("");
+    var tags = (item.watch || []).map(function (t) { return '<span class="tag firm">' + esc(t) + '</span>'; }).join("")
+      + (item.matched || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join("");
     html += '<a class="item ' + esc(item.channel) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
       + '<div class="src">' + CHANNELS[item.channel] + ' \u00B7 ' + esc(item.source || "\u2014")
       + (item.date ? ' \u00B7 ' + esc(item.date) : '')
