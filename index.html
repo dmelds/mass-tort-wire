@@ -151,6 +151,10 @@
   <textarea id="outletsInput" rows="3"></textarea>
   <p class="hint">Each outlet runs one Google News search limited to that site. Leave blank to turn this off.</p>
 
+  <div class="label">BLOCKED SOURCES (ONE PER LINE)</div>
+  <textarea id="blockedInput" rows="2"></textarea>
+  <p class="hint">A publisher name as shown on items, or a domain. Applies to both channels.</p>
+
   <div class="label">NEWS SITE FEEDS (ONE PER LINE)</div>
   <textarea id="newsFeedsInput" rows="3"></textarea>
 
@@ -187,6 +191,7 @@
 var DEFAULTS = {
   topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
+  blockedSources: ["Yahoo Sports", "sports.yahoo.com"],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
     "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
@@ -242,6 +247,7 @@ function readOutlets() {
 
 function fillInputs() {
   document.getElementById("outletsInput").value = settings.outlets.join("\n");
+  document.getElementById("blockedInput").value = settings.blockedSources.join("\n");
   document.getElementById("newsFeedsInput").value = settings.newsFeeds.join("\n");
   document.getElementById("firmWatchInput").value = settings.firmWatch.join("\n");
   document.getElementById("firmFeedsInput").value = settings.firmFeeds.join("\n");
@@ -283,6 +289,9 @@ document.getElementById("topicInput").addEventListener("keydown", function (e) {
 
 document.getElementById("newsFeedsInput").addEventListener("change", function () {
   settings.newsFeeds = linesOf("newsFeedsInput"); persist();
+});
+document.getElementById("blockedInput").addEventListener("change", function () {
+  settings.blockedSources = linesOf("blockedInput"); persist();
 });
 document.getElementById("outletsInput").addEventListener("change", function () {
   settings.outlets = readOutlets(); persist();
@@ -349,7 +358,8 @@ function callFeeds(entries, perFeed) {
       urls: entries,
       topics: settings.topics,
       days: settings.windowDays,
-      perFeed: perFeed
+      perFeed: perFeed,
+      blockSources: settings.blockedSources
     })
   }, 20000).then(function (res) {
     if (res.status === 404) throw new Error("FEEDS FUNCTION NOT DEPLOYED (404). NETLIFY/FUNCTIONS/FEEDS.JS MUST BE IN THE REPO.");
@@ -404,13 +414,18 @@ function coreTerm(t) {
     .replace(/\s+/g, " ").trim() || t;
 }
 
+// Outlet searches pair your topic terms with a legal word, so a bare term like
+// "Roundup" can't match sports roundups. Yahoo's sports section is excluded outright.
+var LEGAL_CONTEXT = "(lawsuit OR lawsuits OR litigation OR settlement OR verdict OR MDL OR court OR jury)";
+var OUTLET_EXCLUDES = { "yahoo.com": " -site:sports.yahoo.com" };
+
 function outletSearches() {
   var terms = settings.topics.map(coreTerm).filter(Boolean)
     .map(function (t) { return '"' + t.replace(/"/g, "") + '"'; });
   if (!terms.length) return [];
   return settings.outlets.map(function (d) {
     return {
-      url: gnews("site:" + d + " (" + terms.join(" OR ") + ")" + whenClause()),
+      url: gnews("site:" + d + " (" + terms.join(" OR ") + ") " + LEGAL_CONTEXT + (OUTLET_EXCLUDES[d] || "") + whenClause()),
       label: (OUTLET_NAMES[d] || d) + " (site search)"
     };
   });
@@ -461,6 +476,7 @@ function runScan() {
   if (scanning) return;
   scanning = true;
   settings.outlets = readOutlets();
+  settings.blockedSources = linesOf("blockedInput");
   settings.newsFeeds = linesOf("newsFeedsInput");
   settings.firmWatch = linesOf("firmWatchInput");
   settings.firmFeeds = linesOf("firmFeedsInput");
@@ -529,8 +545,9 @@ function renderHealth() {
   ["news", "firms"].forEach(function (ch) {
     health[ch].forEach(function (f) {
       var note = f.status === "error" ? f.error
-        : f.status === "empty" ? "nothing in window"
-        : f.found + " in window" + (f.count < f.found ? " (" + (f.found - f.count) + " duplicate)" : "");
+        : f.status === "empty" ? (f.blocked ? "all " + f.blocked + " blocked" : "nothing in window")
+        : f.found + " in window" + (f.count < f.found ? " (" + (f.found - f.count) + " duplicate)" : "")
+          + (f.blocked ? ", " + f.blocked + " blocked" : "");
       var where = f.resolved && f.resolved !== f.url ? " \u2192 " + f.resolved : "";
       rows.push('<tr><td>' + CHANNELS[ch] + '</td><td>' + esc(f.source) +
         (f.search ? "" : '<br><span class="empty">' + esc(f.url + where) + '</span>') +
