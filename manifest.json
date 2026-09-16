@@ -1,7 +1,7 @@
 {
   "name": "Mass Tort Wire",
   "short_name": "Wire",
-  "description": "What Reddit, LinkedIn, and the plaintiff bar are saying right now.",
+  "description": "Mass tort news and what plaintiff firms are publishing.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FCFBF7",

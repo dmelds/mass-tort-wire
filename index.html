@@ -22,10 +22,9 @@
     --amber: #B07F2E;
     --dim: #6E6A5E;
     --panel: #F4F1E8;
-    --reddit: #C2511F;
-    --linkedin: #2E5E7E;
+    --news: #2E5E7E;
     --firms: #3E6B4F;
-    --trends: #5E5480;
+    --bad: #A2412A;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -34,8 +33,6 @@
     font-family: 'IBM Plex Sans', -apple-system, sans-serif;
     -webkit-text-size-adjust: 100%;
   }
-  .mono { font-family: 'IBM Plex Mono', Menlo, monospace; }
-  .display { font-family: 'Spectral', Georgia, serif; }
 
   header { border-bottom: 3px double var(--ink); padding: calc(24px + env(safe-area-inset-top)) 20px 16px; }
   .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); margin-bottom: 4px; }
@@ -43,20 +40,21 @@
   .tagline { color: var(--dim); font-size: 14px; margin-top: 4px; }
 
   .controls { border-bottom: 1px solid var(--rule); padding: 12px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  button { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  button, select { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   #scanBtn { background: var(--ink); color: var(--paper); border: none; padding: 10px 18px; }
   #scanBtn:disabled { background: var(--dim); }
-  #configBtn { background: none; color: var(--dim); border: 1px solid var(--rule); padding: 9px 12px; }
+  .ghost { background: none; color: var(--dim); border: 1px solid var(--rule); padding: 9px 12px; }
+  .ghost.on { color: var(--paper); background: var(--amber); border-color: var(--amber); }
+  select.ghost { appearance: none; -webkit-appearance: none; border-radius: 0; }
   .channel-status { margin-left: auto; display: flex; gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
-  .channel-status .reddit { color: var(--reddit); }
-  .channel-status .linkedin { color: var(--linkedin); }
+  .channel-status .news { color: var(--news); }
   .channel-status .firms { color: var(--firms); }
-  .channel-status .trends { color: var(--trends); }
 
   #config { display: none; border-bottom: 1px solid var(--rule); background: var(--panel); padding: 16px 20px; }
   #config.open { display: block; }
-  .label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); margin: 12px 0 8px; }
+  .label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); margin: 16px 0 8px; }
   .label:first-child { margin-top: 0; }
+  .hint { font-size: 12px; color: var(--dim); margin-top: 6px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { border: 1px solid var(--ink); font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 5px 8px; display: inline-flex; align-items: center; gap: 8px; }
   .chip button { border: none; background: none; color: var(--dim); font-size: 12px; padding: 0; }
@@ -68,57 +66,51 @@
   }
   textarea { resize: vertical; }
   .add-btn { background: none; border: 1px solid var(--ink); padding: 9px 14px; flex-shrink: 0; }
+  .config-foot { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+  .health { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .health td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--rule); vertical-align: top; word-break: break-word; }
+  .health .ok { color: var(--firms); }
+  .health .empty { color: var(--dim); }
+  .health .error { color: var(--bad); }
 
   .filters {
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    position: sticky; top: 0; z-index: 10;
     background: var(--paper);
     border-bottom: 1px solid var(--rule);
-    padding: 10px 16px calc(10px + 0px);
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    padding: 10px 16px;
+    display: flex; gap: 8px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
   .filters::-webkit-scrollbar { display: none; }
   .filters button {
-    background: var(--paper);
-    border: 1px solid var(--rule);
-    color: var(--dim);
-    padding: 12px 16px;
-    min-height: 44px;
-    border-radius: 2px;
-    white-space: nowrap;
-    flex-shrink: 0;
+    background: var(--paper); border: 1px solid var(--rule); color: var(--dim);
+    padding: 12px 16px; min-height: 44px; border-radius: 2px;
+    white-space: nowrap; flex-shrink: 0;
   }
   .filters button.active { color: var(--paper); border-color: transparent; background: var(--ink); }
-  .filters button.active[data-f="reddit"] { background: var(--reddit); }
-  .filters button.active[data-f="linkedin"] { background: var(--linkedin); }
+  .filters button.active[data-f="news"] { background: var(--news); }
   .filters button.active[data-f="firms"] { background: var(--firms); }
-  .filters button.active[data-f="trends"] { background: var(--trends); }
 
   main { padding: 16px 20px 40px; }
-  .empty { text-align: center; padding: 64px 20px; }
-  .empty .display { font-size: 20px; font-style: italic; margin-bottom: 8px; }
-  .empty p { color: var(--dim); font-size: 14px; }
-  .notice { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .empty-state { text-align: center; padding: 64px 20px; }
+  .empty-state .display { font-family: 'Spectral', Georgia, serif; font-size: 20px; font-style: italic; margin-bottom: 8px; }
+  .empty-state p { color: var(--dim); font-size: 14px; }
+  .notice { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); padding: 12px 0; border-bottom: 1px solid var(--rule); line-height: 1.5; }
+  .notice.bad { color: var(--bad); }
 
   .item { display: block; padding: 12px 0 12px 12px; border-bottom: 1px solid var(--rule); border-left: 3px solid var(--rule); text-decoration: none; color: var(--ink); }
   .item:active { background: var(--panel); }
-  .item.reddit { border-left-color: var(--reddit); }
-  .item.linkedin { border-left-color: var(--linkedin); }
+  .item.news { border-left-color: var(--news); }
   .item.firms { border-left-color: var(--firms); }
-  .item.trends { border-left-color: var(--trends); }
   .item .src { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; margin-bottom: 4px; }
-  .item.reddit .src { color: var(--reddit); }
-  .item.linkedin .src { color: var(--linkedin); }
+  .item.news .src { color: var(--news); }
   .item.firms .src { color: var(--firms); }
-  .item.trends .src { color: var(--trends); }
+  .item .new { background: var(--amber); color: var(--paper); padding: 1px 5px; margin-left: 6px; letter-spacing: 0.1em; }
   .item .title { font-family: 'Spectral', Georgia, serif; font-size: 16px; font-weight: 600; line-height: 1.3; }
   .item .sum { color: var(--dim); font-size: 13px; line-height: 1.4; margin-top: 4px; }
-  .item .meta { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); margin-top: 4px; }
+  .item .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .item .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); border: 1px solid var(--rule); padding: 2px 6px; }
 
   footer { border-top: 1px solid var(--rule); padding: 16px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); line-height: 1.6; }
 </style>
@@ -128,17 +120,20 @@
 <header>
   <div class="eyebrow">SIGNALS DESK &middot; <span id="today"></span></div>
   <h1>Mass Tort Wire</h1>
-  <p class="tagline">What Reddit, LinkedIn, and the plaintiff bar are saying right now.</p>
+  <p class="tagline">Mass tort news and what plaintiff firms are publishing.</p>
 </header>
 
 <div class="controls">
   <button id="scanBtn">RUN SCAN</button>
-  <button id="configBtn">EDIT TOPICS</button>
+  <button id="configBtn" class="ghost">EDIT SOURCES</button>
+  <select id="windowSel" class="ghost" aria-label="Time window">
+    <option value="7">LAST 7 DAYS</option>
+    <option value="30">LAST 30 DAYS</option>
+  </select>
+  <button id="topicsOnlyBtn" class="ghost" aria-pressed="false">MY TOPICS ONLY</button>
   <div class="channel-status">
-    <span class="reddit">REDDIT <span id="st-reddit"></span></span>
-    <span class="linkedin">LINKEDIN <span id="st-linkedin"></span></span>
-    <span class="firms">FIRM WIRE <span id="st-firms"></span></span>
-    <span class="trends">TRENDS <span id="st-trends"></span></span>
+    <span class="news">NEWS <span id="st-news"></span></span>
+    <span class="firms">FIRMS <span id="st-firms"></span></span>
   </div>
 </div>
 
@@ -149,84 +144,148 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <div class="label">SUBREDDITS (BLANK = ALL OF REDDIT)</div>
-  <input type="text" id="subsInput" placeholder="e.g. legaladvice, Mesothelioma, ClassActions">
-  <div class="label">FIRMS TO WATCH (AI SWEEP)</div>
-  <textarea id="firmsInput" rows="2"></textarea>
-  <div class="label">FIRM RSS FEEDS (ONE PER LINE, NO API KEY NEEDED)</div>
-  <textarea id="feedsInput" rows="4"></textarea>
+  <p class="hint">Each topic runs as a Google News search for the News Wire, up to 12. Topics also tag matching Firm Wire posts.</p>
+
+  <div class="label">NEWS SITE FEEDS (ONE PER LINE)</div>
+  <textarea id="newsFeedsInput" rows="3"></textarea>
+
+  <div class="label">FIRM FEEDS (ONE PER LINE)</div>
+  <textarea id="firmFeedsInput" rows="5"></textarea>
+  <p class="hint">A blog page URL works if the page lists its feed. Settings save on this device.</p>
+
+  <div class="label">SOURCE HEALTH (LAST SCAN)</div>
+  <div id="healthBox"><p class="hint">Run a scan to see which sources respond.</p></div>
+
+  <div class="config-foot">
+    <button class="ghost" id="resetBtn">RESET TO DEFAULTS</button>
+  </div>
 </div>
 
 <div class="filters">
-  <button data-f="all" class="active">ALL</button>
-  <button data-f="reddit">REDDIT (<span id="ct-reddit">0</span>)</button>
-  <button data-f="linkedin">LINKEDIN (<span id="ct-linkedin">0</span>)</button>
+  <button data-f="all" class="active">ALL (<span id="ct-all">0</span>)</button>
+  <button data-f="news">NEWS WIRE (<span id="ct-news">0</span>)</button>
   <button data-f="firms">FIRM WIRE (<span id="ct-firms">0</span>)</button>
-  <button data-f="trends">TRENDS (<span id="ct-trends">0</span>)</button>
 </div>
 
-<main id="feed">
-  <div class="empty">
-    <p class="display">The wire is quiet.</p>
-    <p>Run a scan to pull the latest chatter across all three channels.</p>
-  </div>
-</main>
+<main id="feed"></main>
 
 <footer>
-  REDDIT: LIVE PUBLIC API &middot; FIRM WIRE: RSS + OPTIONAL AI SWEEP &middot; LINKEDIN: AI WEB SEARCH &middot; TRENDS: GOOGLE TRENDS (UNOFFICIAL) &middot; SESSION ONLY, NOTHING STORED
+  NEWS WIRE: GOOGLE NEWS SEARCH + NEWS SITE RSS &middot; FIRM WIRE: FIRM RSS &middot; NO API KEYS &middot; SETTINGS SAVED ON THIS DEVICE
 </footer>
 
 <script>
-// ── State ──
-var topics = ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"];
+// ── Defaults ──
+var DEFAULTS = {
+  topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
+  newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
+  firmFeeds: [
+    "https://www.sokolovelaw.com/blog/",
+    "https://gorilaw.com/blog/",
+    "https://www.lawsuit-information-center.com/"
+  ],
+  windowDays: 7,
+  topicsOnly: false
+};
+var STORE_KEY = "mtw:settings:v2";
+var SEEN_KEY = "mtw:seen:v2";
+var BATCH = 12;               // feeds function limit per call
+var CHANNELS = { news: "NEWS WIRE", firms: "FIRM WIRE" };
+
+// ── Storage (guarded: private browsing can refuse it) ──
+function load(key, fallback) {
+  try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return fallback; }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
+}
+
+var settings = Object.assign({}, DEFAULTS, load(STORE_KEY, {}));
+var seenBefore = load(SEEN_KEY, null);   // null on first visit: no NEW badges
 var items = [];
 var errors = {};
+var health = { news: [], firms: [] };
 var filter = "all";
 var scanned = false;
-var aiUnavailable = false;
+var scanning = false;
 
-var CHANNELS = { reddit: "REDDIT", linkedin: "LINKEDIN", firms: "FIRM WIRE", trends: "TRENDS" };
+function persist() { save(STORE_KEY, settings); }
 
+// ── Settings UI ──
 document.getElementById("today").textContent = new Date().toISOString().slice(0, 10);
-document.getElementById("firmsInput").value = "Weitz & Luxenberg, Sokolove Law, The Gori Law Firm, Motley Rice, Keller Postman, Morgan & Morgan";
-document.getElementById("feedsInput").value = [
-  "https://www.aboutlawsuits.com/feed/",
-  "https://www.sokolovelaw.com/blog/",
-  "https://gorilaw.com/blog/",
-  "https://www.lawsuit-information-center.com/"
-].join("\n");
 
-// ── Topic chips ──
+function linesOf(id) {
+  return document.getElementById(id).value
+    .split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
+}
+
+function fillInputs() {
+  document.getElementById("newsFeedsInput").value = settings.newsFeeds.join("\n");
+  document.getElementById("firmFeedsInput").value = settings.firmFeeds.join("\n");
+  document.getElementById("windowSel").value = String(settings.windowDays);
+  var tb = document.getElementById("topicsOnlyBtn");
+  tb.classList.toggle("on", settings.topicsOnly);
+  tb.setAttribute("aria-pressed", settings.topicsOnly ? "true" : "false");
+  renderChips();
+}
+
 function renderChips() {
   var el = document.getElementById("topicChips");
   el.innerHTML = "";
-  topics.forEach(function (t) {
+  settings.topics.forEach(function (t) {
     var chip = document.createElement("span");
     chip.className = "chip";
     chip.textContent = t + " ";
     var x = document.createElement("button");
     x.textContent = "\u2715";
     x.setAttribute("aria-label", "Remove " + t);
-    x.onclick = function () { topics = topics.filter(function (v) { return v !== t; }); renderChips(); };
+    x.onclick = function () {
+      settings.topics = settings.topics.filter(function (v) { return v !== t; });
+      persist(); renderChips();
+    };
     chip.appendChild(x);
     el.appendChild(chip);
   });
 }
-renderChips();
 
-document.getElementById("addTopic").onclick = addTopic;
-document.getElementById("topicInput").addEventListener("keydown", function (e) { if (e.key === "Enter") addTopic(); });
 function addTopic() {
   var inp = document.getElementById("topicInput");
   var t = inp.value.trim();
-  if (t && topics.indexOf(t) === -1) { topics.push(t); renderChips(); }
+  var exists = settings.topics.some(function (v) { return v.toLowerCase() === t.toLowerCase(); });
+  if (t && !exists) { settings.topics.push(t); persist(); renderChips(); }
   inp.value = "";
 }
+document.getElementById("addTopic").onclick = addTopic;
+document.getElementById("topicInput").addEventListener("keydown", function (e) { if (e.key === "Enter") addTopic(); });
+
+document.getElementById("newsFeedsInput").addEventListener("change", function () {
+  settings.newsFeeds = linesOf("newsFeedsInput"); persist();
+});
+document.getElementById("firmFeedsInput").addEventListener("change", function () {
+  settings.firmFeeds = linesOf("firmFeedsInput"); persist();
+});
+
+document.getElementById("windowSel").onchange = function () {
+  settings.windowDays = Number(this.value) || 7;
+  persist();
+  runScan();   // the window changes what the news searches ask for
+};
+
+document.getElementById("topicsOnlyBtn").onclick = function () {
+  settings.topicsOnly = !settings.topicsOnly;
+  persist(); fillInputs(); renderFeed();
+};
 
 document.getElementById("configBtn").onclick = function () {
   var c = document.getElementById("config");
   c.classList.toggle("open");
-  this.textContent = c.classList.contains("open") ? "HIDE TOPICS" : "EDIT TOPICS";
+  this.textContent = c.classList.contains("open") ? "HIDE SOURCES" : "EDIT SOURCES";
+};
+
+document.getElementById("resetBtn").onclick = function () {
+  if (!confirm("Reset topics and feeds to the defaults?")) return;
+  settings = JSON.parse(JSON.stringify(DEFAULTS));
+  persist(); fillInputs();
 };
 
 // ── Filters ──
@@ -239,306 +298,239 @@ document.querySelectorAll(".filters button").forEach(function (b) {
   };
 });
 
-// ── Status indicators ──
 function setStatus(ch, s) {
   var map = { scanning: "\u2026", done: "\u2713", empty: "0", error: "\u2715" };
   document.getElementById("st-" + ch).textContent = map[s] || "";
 }
 
-// Fetch with a hard timeout so a hung request can't stall the whole scan
+// ── Fetching ──
 function fetchT(url, opts, ms) {
   var ctrl = new AbortController();
-  var timer = setTimeout(function () { ctrl.abort(); }, ms || 10000);
+  var timer = setTimeout(function () { ctrl.abort(); }, ms || 15000);
   opts = opts || {};
   opts.signal = ctrl.signal;
   return fetch(url, opts).finally(function () { clearTimeout(timer); });
 }
 
-// ── Reddit: four attempts in order ──
-// 1) official OAuth API via Netlify function (most reliable; needs creds)
-// 2) direct browser fetch of reddit's JSON API
-// 3) reddit's RSS endpoints via the Netlify feeds function
-// 4) reddit's JSON API via a public CORS relay
-function redditJsonUrls(subs) {
-  var scoped = subs.length > 0;
-  var base = scoped
-    ? "https://www.reddit.com/r/" + subs.join("+") + "/search.json"
-    : "https://www.reddit.com/search.json";
-  var urls = topics.slice(0, 4).map(function (q) {
-    return base + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : "");
-  });
-  // Pinned: always check r/law for new posts with "lawsuit" in the title
-  urls.push("https://www.reddit.com/r/law/search.json?q=" + encodeURIComponent("title:lawsuit") + "&sort=new&t=month&limit=8&restrict_sr=1");
-  return urls;
-}
-
-function parseRedditResults(results) {
-  var seen = {}, out = [];
-  results.forEach(function (r) {
-    if (r.status !== "fulfilled" || !r.value || !r.value.data) return;
-    (r.value.data.children || []).forEach(function (c) {
-      var d = c.data;
-      if (!d || seen[d.id]) return;
-      seen[d.id] = true;
-      out.push({
-        channel: "reddit",
-        title: d.title,
-        source: "r/" + d.subreddit,
-        url: "https://www.reddit.com" + d.permalink,
-        date: new Date(d.created_utc * 1000).toISOString().slice(0, 10),
-        meta: d.score + " pts \u00B7 " + d.num_comments + " comments",
-        summary: d.selftext ? d.selftext.slice(0, 220) : ""
-      });
-    });
-  });
-  out.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
-  return out.slice(0, 18);
-}
-
-function redditViaApi(subs) {
-  var searches = topics.slice(0, 4).map(function (q) {
-    return { q: q, subs: subs, limit: 6 };
-  });
-  searches.push({ q: "title:lawsuit", subs: ["law"], limit: 8 });
-  return fetchT("/.netlify/functions/reddit", {
+function callFeeds(entries, perFeed) {
+  return fetchT("/.netlify/functions/feeds", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ searches: searches })
-  }, 15000).then(function (res) {
-    if (!res.ok) return [];  // missing creds or function: fall through to next path
-    return res.json().then(function (data) { return data.items || []; });
-  }).catch(function () { return []; });
-}
-
-function redditDirect(urls) {
-  return Promise.allSettled(urls.map(function (u) {
-    return fetchT(u, {}, 8000).then(function (r) { return r.json(); });
-  })).then(parseRedditResults);
-}
-
-function redditViaRelay(urls) {
-  return Promise.allSettled(urls.map(function (u) {
-    return fetchT("https://api.allorigins.win/raw?url=" + encodeURIComponent(u), {}, 12000)
-      .then(function (r) { return r.json(); });
-  })).then(parseRedditResults);
-}
-
-function redditViaRss(subs) {
-  var scoped = subs.length > 0;
-  var rssUrls = topics.slice(0, 4).map(function (q) {
-    return (scoped
-      ? "https://www.reddit.com/r/" + subs.join("+") + "/search.rss"
-      : "https://www.reddit.com/search.rss")
-      + "?q=" + encodeURIComponent(q) + "&sort=new&t=month&limit=6" + (scoped ? "&restrict_sr=1" : "");
-  });
-  rssUrls.push("https://www.reddit.com/r/law/search.rss?q=" + encodeURIComponent("title:lawsuit") + "&sort=new&t=month&limit=8&restrict_sr=1");
-  return callFeedsFn(rssUrls).then(function (arr) {
-    return arr.map(function (i) {
-      i.channel = "reddit"; i.meta = ""; return i;
-    }).slice(0, 18);
+    body: JSON.stringify({
+      urls: entries,
+      topics: settings.topics,
+      days: settings.windowDays,
+      perFeed: perFeed
+    })
+  }, 20000).then(function (res) {
+    if (res.status === 404) throw new Error("FEEDS FUNCTION NOT DEPLOYED (404). NETLIFY/FUNCTIONS/FEEDS.JS MUST BE IN THE REPO.");
+    if (!res.ok) throw new Error("FEEDS FUNCTION ERROR " + res.status);
+    return res.json();
+  }).then(function (data) {
+    return { items: data.items || [], feeds: data.feeds || [] };
+  }).catch(function (err) {
+    if (err && err.name === "AbortError") throw new Error("FEEDS FUNCTION TIMED OUT.");
+    throw err;
   });
 }
 
-function fetchReddit(subs) {
-  var urls = redditJsonUrls(subs);
-  return redditViaApi(subs)
-    .then(function (out) {
-      if (out.length) return out;
-      return redditDirect(urls);
-    })
-    .then(function (out) {
-      if (out.length) return out;
-      return redditViaRss(subs).catch(function () { return []; });
-    })
-    .then(function (out) {
-      if (out.length) return out;
-      return redditViaRelay(urls);
-    })
-    .then(function (out) {
-      if (!out.length) throw new Error("REDDIT BLOCKED ALL PATHS. FOR A RELIABLE FIX: CREATE NETLIFY/FUNCTIONS/REDDIT.JS AND ADD REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET IN NETLIFY (FREE APP AT REDDIT.COM/PREFS/APPS).");
+// Split into batches of 12 and merge, dropping duplicates across batches.
+function runBatches(entries, perFeed) {
+  if (!entries.length) return Promise.resolve({ items: [], feeds: [] });
+  var batches = [];
+  for (var i = 0; i < entries.length; i += BATCH) batches.push(entries.slice(i, i + BATCH));
+  return Promise.allSettled(batches.map(function (b) { return callFeeds(b, perFeed); }))
+    .then(function (results) {
+      var ok = results.filter(function (r) { return r.status === "fulfilled"; });
+      if (!ok.length) throw results[0].reason;
+      var seen = {}, out = { items: [], feeds: [] };
+      ok.forEach(function (r) {
+        out.feeds = out.feeds.concat(r.value.feeds);
+        r.value.items.forEach(function (it) {
+          var k = it.url;
+          if (seen[k]) return;
+          seen[k] = true;
+          out.items.push(it);
+        });
+      });
       return out;
     });
 }
 
-// ── LinkedIn + Firm Wire via Netlify Function (server-side Claude call) ──
-function askClaude(prompt) {
-  return fetch("/.netlify/functions/scan", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt: prompt })
-  }).then(function (res) {
-    if (res.status === 503) { aiUnavailable = true; return []; }
-    if (res.status === 404) throw new Error("SCAN FUNCTION NOT DEPLOYED (404). CHECK NETLIFY/FUNCTIONS/SCAN.JS EXISTS IN THE REPO.");
-    if (!res.ok) throw new Error("SCAN FUNCTION ERROR " + res.status);
-    return res.json().then(function (data) {
-      var clean = (data.text || "").replace(/```json|```/g, "").trim();
-      var s = clean.indexOf("["), e = clean.lastIndexOf("]");
-      if (s === -1 || e === -1) return [];
-      try { return JSON.parse(clean.slice(s, e + 1)); } catch (err) { return []; }
-    });
+function googleNewsUrl(topic) {
+  var q = topic + (settings.windowDays <= 7 ? " when:7d" : "");
+  return "https://news.google.com/rss/search?q=" + encodeURIComponent(q) + "&hl=en-US&gl=US&ceid=US:en";
+}
+
+function fetchNews() {
+  var searches = settings.topics.slice(0, 12).map(function (t) {
+    return { url: googleNewsUrl(t), topic: t };
   });
-}
-
-function fetchLinkedIn() {
-  return askClaude(
-    'Search the web for recent LinkedIn posts and discussions (use site:linkedin.com searches) from the plaintiff bar and legal industry about: ' + topics.join(", ") +
-    '. Respond with ONLY a raw JSON array, no markdown. Each element: {"title": string, "source": string (author or page), "url": string, "date": "YYYY-MM-DD" or "", "summary": string (one sentence in your own words)}. Max 8 items.'
-  ).then(function (arr) {
-    return arr.map(function (i) { i.channel = "linkedin"; i.meta = ""; return i; });
-  });
-}
-
-function callFeedsFn(urls) {
-  return fetch("/.netlify/functions/feeds", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ urls: urls })
-  }).then(function (res) {
-    if (res.status === 404) throw new Error("FEEDS FUNCTION NOT DEPLOYED (404). NETLIFY.TOML + NETLIFY/ FOLDER MUST BE AT REPO ROOT.");
-    if (!res.ok) throw new Error("FEEDS FUNCTION ERROR " + res.status);
-    return res.json();
-  }).then(function (data) { return data.items || []; });
-}
-
-function fetchFeeds() {
-  var urls = document.getElementById("feedsInput").value
-    .split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
-  if (!urls.length) return Promise.resolve([]);
-  return callFeedsFn(urls);
-}
-
-function firmSweep() {
-  var firms = document.getElementById("firmsInput").value;
-  return askClaude(
-    'Search the web for blog posts, news items, and litigation updates published in roughly the last 30 days by plaintiff law firms, especially ' + firms + ', covering: ' + topics.join(", ") +
-    '. Respond with ONLY a raw JSON array, no markdown. Each element: {"title": string, "source": string (firm name), "url": string, "date": "YYYY-MM-DD" or "", "summary": string (one sentence in your own words)}. Max 8 items.'
-  );
+  return Promise.allSettled([runBatches(searches, 10), runBatches(settings.newsFeeds, 8)])
+    .then(function (results) { return mergeChannel(results, "news"); });
 }
 
 function fetchFirms() {
-  // RSS feeds run regardless of API key; AI sweep merges in on top if the key exists.
-  return Promise.allSettled([fetchFeeds(), firmSweep()]).then(function (results) {
-    var seen = {}, out = [];
-    results.forEach(function (r) {
-      if (r.status !== "fulfilled") return;
-      (r.value || []).forEach(function (i) {
-        if (!i.url || seen[i.url]) return;
-        seen[i.url] = true;
-        i.channel = "firms";
-        i.meta = "";
-        out.push(i);
-      });
-    });
-    if (out.length === 0 && results[0].status === "rejected") {
-      throw results[0].reason;
-    }
-    out.sort(function (a, b) { return (a.date || "") < (b.date || "") ? 1 : -1; });
-    return out.slice(0, 20);
-  });
+  return runBatches(settings.firmFeeds, 8)
+    .then(function (r) { return mergeChannel([{ status: "fulfilled", value: r }], "firms"); });
 }
 
-// ── Google Trends via Netlify Function (unofficial widget API) ──
-function fetchTrends() {
-  return fetch("/.netlify/functions/trends", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ keywords: topics.slice(0, 5) })
-  }).then(function (res) {
-    if (res.status === 404) throw new Error("TRENDS FUNCTION NOT DEPLOYED (404). CREATE NETLIFY/FUNCTIONS/TRENDS.JS.");
-    return res.json().then(function (data) {
-      if (!res.ok) throw new Error(data.error || ("TRENDS ERROR " + res.status));
-      return (data.items || []).map(function (i) {
-        i.channel = "trends"; i.meta = ""; return i;
-      });
+function mergeChannel(results, ch) {
+  var ok = results.filter(function (r) { return r.status === "fulfilled"; });
+  if (!ok.length) throw results[0].reason;
+  var seen = {}, out = [], feeds = [];
+  ok.forEach(function (r) {
+    feeds = feeds.concat(r.value.feeds);
+    r.value.items.forEach(function (it) {
+      if (seen[it.url]) return;
+      seen[it.url] = true;
+      it.channel = ch;
+      out.push(it);
     });
   });
+  health[ch] = feeds;
+  return out;
 }
 
 // ── Scan ──
 function runScan() {
+  if (scanning) return;
+  scanning = true;
+  settings.newsFeeds = linesOf("newsFeedsInput");
+  settings.firmFeeds = linesOf("firmFeedsInput");
+  persist();
+
   var btn = document.getElementById("scanBtn");
   btn.disabled = true;
   btn.textContent = "SCANNING\u2026";
   items = [];
   errors = {};
+  health = { news: [], firms: [] };
   scanned = true;
-  aiUnavailable = false;
   renderFeed();
-  ["reddit", "linkedin", "firms", "trends"].forEach(function (ch) { setStatus(ch, "scanning"); });
-
-  var subs = document.getElementById("subsInput").value
-    .split(/[,\s]+/)
-    .map(function (s) { return s.trim().replace(/^r\//i, ""); })
-    .filter(Boolean);
+  renderHealth();
+  ["news", "firms"].forEach(function (ch) { setStatus(ch, "scanning"); });
 
   function run(ch, fn) {
     return fn().then(function (res) {
       items = items.concat(res);
       setStatus(ch, res.length ? "done" : "empty");
-      renderFeed();
     }).catch(function (err) {
       errors[ch] = err && err.message ? err.message : "UNKNOWN ERROR";
       setStatus(ch, "error");
+    }).then(function () {
       renderFeed();
+      renderHealth();
     });
   }
 
-  Promise.allSettled([
-    run("reddit", function () { return fetchReddit(subs); }),
-    run("linkedin", fetchLinkedIn),
-    run("firms", fetchFirms),
-    run("trends", fetchTrends)
-  ]).then(function () {
+  Promise.allSettled([run("news", fetchNews), run("firms", fetchFirms)]).then(function () {
+    // Remember everything shown so the next visit can mark what's new.
+    var keys = items.map(function (i) { return i.url; });
+    var prior = seenBefore || [];
+    save(SEEN_KEY, keys.concat(prior.filter(function (k) { return keys.indexOf(k) === -1; })).slice(0, 600));
+    scanning = false;
     btn.disabled = false;
     btn.textContent = "RUN SCAN";
   });
 }
 
 document.getElementById("scanBtn").onclick = runScan;
-// Auto-scan when the app opens
-window.addEventListener("load", runScan);
 
 // ── Render ──
 function esc(s) {
   var d = document.createElement("div");
-  d.textContent = s || "";
+  d.textContent = s == null ? "" : String(s);
   return d.innerHTML;
 }
 
+function isNew(item) {
+  return seenBefore !== null && seenBefore.indexOf(item.url) === -1;
+}
+
+function sortItems(list) {
+  return list.slice().sort(function (a, b) {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return b.date.localeCompare(a.date);
+  });
+}
+
+function renderHealth() {
+  var box = document.getElementById("healthBox");
+  var rows = [];
+  ["news", "firms"].forEach(function (ch) {
+    health[ch].forEach(function (f) {
+      var note = f.status === "error" ? f.error
+        : f.status === "empty" ? "nothing in window"
+        : f.found + " in window" + (f.count < f.found ? " (" + (f.found - f.count) + " duplicate)" : "");
+      var where = f.resolved && f.resolved !== f.url ? " \u2192 " + f.resolved : "";
+      rows.push('<tr><td>' + CHANNELS[ch] + '</td><td>' + esc(f.source) +
+        (f.topic ? "" : '<br><span class="empty">' + esc(f.url + where) + '</span>') +
+        '</td><td class="' + esc(f.status) + '">' + esc(f.status.toUpperCase()) + '<br>' + esc(note) + '</td></tr>');
+    });
+  });
+  box.innerHTML = rows.length
+    ? '<table class="health">' + rows.join("") + '</table>'
+    : '<p class="hint">' + (scanning ? "Scanning\u2026" : "Run a scan to see which sources respond.") + '</p>';
+}
+
 function renderFeed() {
-  ["reddit", "linkedin", "firms", "trends"].forEach(function (ch) {
-    document.getElementById("ct-" + ch).textContent = items.filter(function (i) { return i.channel === ch; }).length;
+  var pool = settings.topicsOnly
+    ? items.filter(function (i) { return i.matched && i.matched.length; })
+    : items;
+
+  document.getElementById("ct-all").textContent = pool.length;
+  ["news", "firms"].forEach(function (ch) {
+    document.getElementById("ct-" + ch).textContent = pool.filter(function (i) { return i.channel === ch; }).length;
   });
 
-  var feed = document.getElementById("feed");
-  var visible = filter === "all" ? items : items.filter(function (i) { return i.channel === filter; });
+  var visible = sortItems(filter === "all" ? pool : pool.filter(function (i) { return i.channel === filter; }));
   var html = "";
 
-  if (aiUnavailable) {
-    html += '<div class="notice">LINKEDIN + AI SWEEP OFFLINE: ADD ANTHROPIC_API_KEY IN NETLIFY TO ENABLE. REDDIT AND FIRM RSS RUN WITHOUT IT.</div>';
-  }
-
   Object.keys(errors).forEach(function (ch) {
-    html += '<div class="notice">' + CHANNELS[ch] + ' \u2715 ' + esc(errors[ch]) + '</div>';
+    html += '<div class="notice bad">' + CHANNELS[ch] + ' \u2715 ' + esc(errors[ch]) + '</div>';
   });
 
+  ["news", "firms"].forEach(function (ch) {
+    var failed = health[ch].filter(function (f) { return f.status === "error"; });
+    if (!failed.length) return;
+    html += '<div class="notice">' + CHANNELS[ch] + ': ' + failed.length + ' OF ' + health[ch].length +
+      ' SOURCES FAILED \u00B7 ' + failed.map(function (f) { return esc(f.source) + ' (' + esc(f.error) + ')'; }).join(', ') +
+      ' \u00B7 SEE EDIT SOURCES</div>';
+  });
+
+  var newCount = visible.filter(isNew).length;
+  if (scanned && newCount) {
+    html += '<div class="notice">' + newCount + ' NEW SINCE YOUR LAST SCAN</div>';
+  }
+
   if (!scanned) {
-    html += '<div class="empty"><p class="display">The wire is quiet.</p><p>Run a scan to pull the latest chatter across all three channels.</p></div>';
-  } else if (visible.length === 0) {
-    html += '<div class="notice">NO ITEMS YET FOR THIS CHANNEL.</div>';
+    html += '<div class="empty-state"><p class="display">The wire is quiet.</p><p>Run a scan to pull the latest news and firm posts.</p></div>';
+  } else if (!visible.length && !scanning) {
+    html += '<div class="notice">' + (settings.topicsOnly ? "NOTHING MATCHES YOUR TOPICS IN THIS WINDOW." : "NO ITEMS IN THIS WINDOW.") + '</div>';
   }
 
   visible.forEach(function (item) {
+    var tags = (item.matched || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join("");
     html += '<a class="item ' + esc(item.channel) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
-      + '<div class="src">' + CHANNELS[item.channel] + ' \u00B7 ' + esc(item.source || "\u2014") + (item.date ? ' \u00B7 ' + esc(item.date) : '') + '</div>'
+      + '<div class="src">' + CHANNELS[item.channel] + ' \u00B7 ' + esc(item.source || "\u2014")
+      + (item.date ? ' \u00B7 ' + esc(item.date) : '')
+      + (isNew(item) ? '<span class="new">NEW</span>' : '') + '</div>'
       + '<div class="title">' + esc(item.title) + '</div>'
       + (item.summary ? '<p class="sum">' + esc(item.summary) + '</p>' : '')
-      + (item.meta ? '<div class="meta">' + esc(item.meta) + '</div>' : '')
+      + (tags ? '<div class="tags">' + tags + '</div>' : '')
       + '</a>';
   });
 
-  feed.innerHTML = html;
+  document.getElementById("feed").innerHTML = html;
 }
+
+// ── Start ──
+fillInputs();
+renderFeed();
+window.addEventListener("load", runScan);
 </script>
 </body>
 </html>
