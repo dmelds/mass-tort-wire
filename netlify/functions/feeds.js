@@ -2,9 +2,11 @@
 // No API key required.
 //
 // POST {
-//   "urls":    ["https://...", {"url": "https://...", "topic": "AFFF lawsuit"}, ...],
-//                                           // required, max 12; `topic` marks a search feed
-//                                           // so every item it returns is tagged with it
+//   "urls":    ["https://...", {"url": "https://...", "topic": "...", "watch": "...", "label": "..."}],
+//                                           // required, max 12. For search feeds:
+//                                           //   topic -> every item is tagged with that topic (`matched`)
+//                                           //   watch -> every item is tagged with that firm (`watch`)
+//                                           //   label -> name shown in the health report
 //   "topics":  ["AFFF lawsuit", ...],       // optional: items get a `matched` list
 //   "days":    30,                          // optional: drop dated items older than this
 //   "perFeed": 8                            // optional: items kept per feed (max 15)
@@ -70,8 +72,10 @@ function truncate(s, n) {
   return (sp > n * 0.6 ? cut.slice(0, sp) : cut) + "\u2026";
 }
 
+// A feed with zero items (a quiet search) is still a feed, so check the root element, not the items.
 function looksLikeFeed(text) {
-  return /<(rss|feed|rdf:RDF)[\s>]/i.test(text) && /<(item|entry)[\s>]/i.test(text);
+  if (/<html[\s>]/i.test(text.slice(0, 2000))) return false;
+  return /<(rss|rdf:RDF)[\s>]/i.test(text) || /<feed[\s>][^>]*http:\/\/www\.w3\.org\/2005\/Atom/i.test(text) || /<feed[\s>]/i.test(text.slice(0, 500));
 }
 
 // The feed's own title (text before the first item/entry) names the firm better than a hostname.
@@ -156,13 +160,15 @@ async function get(url) {
   }
 }
 
-function feedLabel(url, topic) {
-  return AGGREGATORS.test(hostOf(url)) && topic ? "Google News: " + topic : hostOf(url);
+function feedLabel(e) {
+  const name = e.label || e.topic || e.watch;
+  if (name) return AGGREGATORS.test(hostOf(e.url)) ? "Google News: " + name : name;
+  return hostOf(e.url);
 }
 
 async function fetchFeed(entry) {
-  const { url, topic } = entry;
-  const report = { url, topic, resolved: url, source: feedLabel(url, topic), status: "error", count: 0, error: "" };
+  const { url, topic, watch } = entry;
+  const report = { url, topic, watch, search: !!(topic || watch || entry.label), resolved: url, source: feedLabel(entry), status: "error", count: 0, error: "" };
   try {
     let r = await get(url);
     if (!r.ok) throw new Error("HTTP " + r.status);
@@ -187,7 +193,7 @@ async function fetchFeed(entry) {
     }
 
     const items = parseFeed(r.text, report.resolved);
-    if (!AGGREGATORS.test(hostOf(report.resolved))) {
+    if (!report.search && !AGGREGATORS.test(hostOf(report.resolved))) {
       report.source = feedTitle(r.text, report.source);
     }
     report.status = items.length ? "ok" : "empty";
@@ -249,8 +255,13 @@ exports.handler = async (event) => {
     const seenUrls = new Set();
     urls = (body.urls || [])
       .map((u) => (typeof u === "string"
-        ? { url: u.trim(), topic: "" }
-        : { url: String((u && u.url) || "").trim(), topic: String((u && u.topic) || "").trim() }))
+        ? { url: u.trim(), topic: "", watch: "", label: "" }
+        : {
+            url: String((u && u.url) || "").trim(),
+            topic: String((u && u.topic) || "").trim(),
+            watch: String((u && u.watch) || "").trim(),
+            label: String((u && u.label) || "").trim(),
+          }))
       .filter((e) => /^https?:\/\//i.test(e.url) && !seenUrls.has(e.url) && seenUrls.add(e.url))
       .slice(0, 12);
     topics = Array.isArray(body.topics) ? body.topics.map(String).slice(0, 20) : [];
@@ -267,7 +278,7 @@ exports.handler = async (event) => {
   const reports = await Promise.all(
     urls.map((e) =>
       Promise.race([fetchFeed(e), deadline]).then((r) =>
-        r || { url: e.url, topic: e.topic, resolved: e.url, source: feedLabel(e.url, e.topic), status: "error", count: 0, error: "timed out", items: [] }
+        r || { url: e.url, topic: e.topic, watch: e.watch, search: !!(e.topic || e.watch || e.label), resolved: e.url, source: feedLabel(e), status: "error", count: 0, error: "timed out", items: [] }
       )
     )
   );
@@ -293,12 +304,14 @@ exports.handler = async (event) => {
       if (dup) {
         // Same story from a second search feed: keep one copy, carry both topics.
         if (rep.topic && !dup.matched.includes(rep.topic)) dup.matched.push(rep.topic);
+        if (rep.watch && !dup.watch.includes(rep.watch)) dup.watch.push(rep.watch);
         return;
       }
       seen.set(key, i);
       seen.set(tkey, i);
       i.matched = terms.length ? matchTopics(i, terms) : [];
       if (rep.topic && !i.matched.includes(rep.topic)) i.matched.unshift(rep.topic);
+      i.watch = rep.watch ? [rep.watch] : [];
       items.push(i);
       rep.count++;
     });
