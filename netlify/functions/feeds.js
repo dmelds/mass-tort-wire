@@ -9,7 +9,10 @@
 //                                           //   label -> name shown in the health report
 //   "topics":  ["AFFF lawsuit", ...],       // optional: items get a `matched` list
 //   "days":    30,                          // optional: drop dated items older than this
-//   "perFeed": 8                            // optional: items kept per feed (max 15)
+//   "perFeed": 8,                           // optional: items kept per feed (max 15)
+//   "blockSources": ["Yahoo Sports", "sports.yahoo.com"]
+//                                           // optional: drop items from these publishers
+//                                           // (a name, or a domain when the entry has a dot)
 // }
 //
 // Returns { items: [...], feeds: [...] }.
@@ -97,6 +100,7 @@ function parseFeed(xml, feedUrl) {
   (xml.match(/<item[\s>][\s\S]*?<\/item>/gi) || []).forEach((block) => {
     // Aggregators (Google News) name the publisher per item and append it to the headline.
     const pub = clean(tag(block, "source"));
+    const pubUrl = (block.match(/<source[^>]*\burl=["']([^"']+)["']/i) || [])[1] || "";
     let title = clean(tag(block, "title"));
     if (pub && title.endsWith(" - " + pub)) title = title.slice(0, -(pub.length + 3)).trim();
     items.push({
@@ -106,6 +110,7 @@ function parseFeed(xml, feedUrl) {
       // Aggregator descriptions only repeat the headline and publisher.
       summary: aggregator ? "" : truncate(clean(tag(block, "description")), 220),
       source: pub || source,
+      sourceUrl: pubUrl ? decode(pubUrl) : "",
       host,
     });
   });
@@ -228,6 +233,24 @@ function matchTopics(item, terms) {
     .map(({ topic }) => topic);
 }
 
+// Publisher blocklist: entries with a dot match the publisher's domain (or its subdomains),
+// others match the publisher name, case-insensitively.
+function makeBlocker(list) {
+  const names = [], domains = [];
+  list.forEach((raw) => {
+    const e = String(raw).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    if (!e) return;
+    (e.includes(".") ? domains : names).push(e);
+  });
+  return (item) => {
+    const name = (item.source || "").toLowerCase().trim();
+    if (names.includes(name)) return true;
+    const hosts = [item.sourceUrl ? hostOf(item.sourceUrl) : "", item.host || "", hostOf(item.url)]
+      .map((h) => h.toLowerCase());
+    return domains.some((d) => hosts.some((h) => h === d || h.endsWith("." + d)));
+  };
+}
+
 // Same article from two feeds: ignore tracking params, fragments, trailing slash, www.
 function dedupeKey(url) {
   try {
@@ -249,7 +272,7 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "POST only" }) };
   }
 
-  let urls, topics, days, perFeed;
+  let urls, topics, days, perFeed, blockSources;
   try {
     const body = JSON.parse(event.body);
     const seenUrls = new Set();
@@ -267,6 +290,7 @@ exports.handler = async (event) => {
     topics = Array.isArray(body.topics) ? body.topics.map(String).slice(0, 20) : [];
     days = Number(body.days) > 0 ? Number(body.days) : 0;
     perFeed = Math.min(Math.max(Number(body.perFeed) || 8, 1), 15);
+    blockSources = Array.isArray(body.blockSources) ? body.blockSources.slice(0, 50) : [];
     if (!urls.length) throw new Error("no urls");
   } catch {
     return { statusCode: 400, headers, body: JSON.stringify({ error: "bad_body" }) };
@@ -286,16 +310,19 @@ exports.handler = async (event) => {
 
   const cutoff = days ? new Date(Date.now() - days * 86400000).toISOString().slice(0, 10) : "";
   const terms = topicTerms(topics);
+  const blocked = makeBlocker(blockSources);
   const seen = new Map();
   const items = [];
   const norm = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
   reports.forEach((rep) => {
-    const kept = rep.items
-      .filter((i) => !cutoff || !i.date || i.date >= cutoff)
+    const inWindow = rep.items.filter((i) => !cutoff || !i.date || i.date >= cutoff);
+    const kept = inWindow
+      .filter((i) => !blocked(i))
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .slice(0, perFeed);
-    rep.found = kept.length;  // in window, before cross-feed dedupe
+    rep.blocked = inWindow.length - inWindow.filter((i) => !blocked(i)).length;
+    rep.found = kept.length;  // in window, not blocked, before cross-feed dedupe
     rep.count = 0;           // unique items this feed added
     kept.forEach((i) => {
       const key = dedupeKey(i.url);
