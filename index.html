@@ -174,7 +174,7 @@
 
   <div class="label">AI SEARCHES (ONE PER LINE)</div>
   <textarea id="aiSearchInput" rows="8"></textarea>
-  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. The first six lines follow how judges, courts and bar regulators handle AI. The last two follow the suits filed against the AI companies.</p>
+  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. Quotes force a word to appear, and intitle: forces it into the headline. Google News ignores allintitle:.</p>
 
   <div class="label">AI FEEDS (ONE PER LINE)</div>
   <textarea id="aiFeedsInput" rows="3"></textarea>
@@ -206,7 +206,7 @@
 var DEFAULTS = {
   topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
-  blockedSources: ["Yahoo Sports", "sports.yahoo.com"],
+  blockedSources: ["Yahoo Sports", "sports.yahoo.com", "BVM Sports", "bvmsports.com"],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
     "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
@@ -218,14 +218,14 @@ var DEFAULTS = {
     "https://www.lawsuit-information-center.com/"
   ],
   aiSearches: [
-    "AI hallucinated citations sanctions",
-    "judge sanctions lawyer ChatGPT filing",
-    "court rules artificial intelligence filings",
-    "judiciary artificial intelligence policy courts",
-    "bar association guidance lawyers AI use",
-    "AI generated evidence court judge",
-    "AI chatbot teen suicide lawsuit",
-    "OpenAI lawsuit"
+    "intitle:AI intitle:court",
+    "intitle:AI intitle:lawyer",
+    "intitle:AI intitle:judge",
+    '"AI" "sanctions" "court filings"',
+    '"hallucinated" OR "fabricated" citations court lawyer',
+    '"artificial intelligence" "judiciary"',
+    '"AI-generated" evidence court',
+    '"ChatGPT" "lawsuit" teen'
   ],
   aiFeeds: [
     "https://www.lawnext.com/feed",
@@ -505,16 +505,61 @@ function fetchAI() {
     .then(function (results) { return mergeChannel(results, "ai"); });
 }
 
+// A wire story reaches the scan once per outlet that ran it, under a headline reworded
+// just enough to survive a URL or exact-title check. Compare the content words instead.
+var STOP = {
+  the: 1, a: 1, an: 1, of: 1, and: 1, or: 1, to: 1, in: 1, on: 1, for: 1, with: 1,
+  says: 1, said: 1, over: 1, after: 1, as: 1, is: 1, are: 1, at: 1, by: 1, from: 1,
+  its: 1, it: 1, this: 1, that: 1, new: 1, how: 1, why: 1, what: 1, amid: 1, into: 1,
+  but: 1, not: 1, has: 1, have: 1, will: 1, can: 1, was: 1, were: 1
+};
+
+function titleTokens(t) {
+  var set = {}, n = 0;
+  String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ")
+    .forEach(function (w) {
+      if (w.length > 2 && !STOP[w] && !set[w]) { set[w] = 1; n++; }
+    });
+  return { set: set, n: n };
+}
+
+// Share 65% of the shorter headline's content words and it is the same story.
+// Short headlines share words by coincidence, so only full ones are compared this way.
+function sameStory(a, b) {
+  if (a.n < 5 || b.n < 5) return false;
+  var shared = 0;
+  for (var w in a.set) if (b.set[w]) shared++;
+  return shared / Math.min(a.n, b.n) >= 0.65;
+}
+
 function mergeChannel(results, ch) {
   var ok = results.filter(function (r) { return r.status === "fulfilled"; });
   if (!ok.length) throw results[0].reason;
-  var seen = {}, out = [], feeds = [];
+  var seen = {}, out = [], feeds = [], kept = [];
   ok.forEach(function (r) {
     feeds = feeds.concat(r.value.feeds);
     r.value.items.forEach(function (it) {
       if (seen[it.url]) return;
       seen[it.url] = true;
+
+      var tok = titleTokens(it.title);
+      for (var k = 0; k < kept.length; k++) {
+        if (!sameStory(tok, kept[k].tok)) continue;
+        // Keep the first copy and give it the tags the later copies arrived with.
+        var first = kept[k].item;
+        (it.matched || []).forEach(function (t) {
+          if (first.matched.indexOf(t) === -1) first.matched.push(t);
+        });
+        (it.watch || []).forEach(function (t) {
+          if (first.watch.indexOf(t) === -1) first.watch.push(t);
+        });
+        return;
+      }
+
+      it.matched = it.matched || [];
+      it.watch = it.watch || [];
       it.channel = ch;
+      kept.push({ tok: tok, item: it });
       out.push(it);
     });
   });
