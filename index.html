@@ -157,6 +157,10 @@
   <textarea id="outletsInput" rows="3"></textarea>
   <p class="hint">Each outlet runs one Google News search limited to that site, and requires a topic term in the headline. Leave blank to turn this off.</p>
 
+  <div class="label">TRUSTED SOURCES (ONE PER LINE)</div>
+  <textarea id="trustedInput" rows="2"></textarea>
+  <p class="hint">A topic search keeps an item when its headline or summary carries the topic. These publishers are exempt, so a Reuters story headlined "forever chemicals" still counts as PFAS. A publisher name as shown on items, or a domain.</p>
+
   <div class="label">BLOCKED SOURCES (ONE PER LINE)</div>
   <textarea id="blockedInput" rows="2"></textarea>
   <p class="hint">A publisher name as shown on items, or a domain. Applies to both channels.</p>
@@ -220,6 +224,9 @@ var DEFAULTS = {
     "AD HOC NEWS", "ad-hoc-news.de",
     "India Gazette", "indiagazette.com"
   ],
+  // Publishers exempt from the topic check on a topic search. Reuters headlines a PFAS
+  // story "forever chemicals" and never says PFAS, and the story is still the story.
+  trustedSources: ["Reuters", "reuters.com", "Law360", "law360.com"],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
     "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
@@ -306,6 +313,7 @@ function readOutlets() {
 function fillInputs() {
   document.getElementById("outletsInput").value = settings.outlets.join("\n");
   document.getElementById("blockedInput").value = settings.blockedSources.join("\n");
+  document.getElementById("trustedInput").value = settings.trustedSources.join("\n");
   document.getElementById("newsFeedsInput").value = settings.newsFeeds.join("\n");
   document.getElementById("firmWatchInput").value = settings.firmWatch.join("\n");
   document.getElementById("firmFeedsInput").value = settings.firmFeeds.join("\n");
@@ -352,6 +360,9 @@ document.getElementById("newsFeedsInput").addEventListener("change", function ()
 });
 document.getElementById("blockedInput").addEventListener("change", function () {
   settings.blockedSources = linesOf("blockedInput"); persist();
+});
+document.getElementById("trustedInput").addEventListener("change", function () {
+  settings.trustedSources = linesOf("trustedInput"); persist();
 });
 document.getElementById("outletsInput").addEventListener("change", function () {
   settings.outlets = readOutlets(); persist();
@@ -425,7 +436,8 @@ function callFeeds(entries, perFeed) {
       topics: settings.topics,
       days: settings.windowDays,
       perFeed: perFeed,
-      blockSources: settings.blockedSources
+      blockSources: settings.blockedSources,
+      trustSources: settings.trustedSources
     })
   }, 20000).then(function (res) {
     if (res.status === 404) throw new Error("FEEDS FUNCTION NOT DEPLOYED (404). NETLIFY/FUNCTIONS/FEEDS.JS MUST BE IN THE REPO.");
@@ -619,6 +631,7 @@ function runScan() {
   scanning = true;
   settings.outlets = readOutlets();
   settings.blockedSources = linesOf("blockedInput");
+  settings.trustedSources = linesOf("trustedInput");
   settings.newsFeeds = linesOf("newsFeedsInput");
   settings.firmWatch = linesOf("firmWatchInput");
   settings.firmFeeds = linesOf("firmFeedsInput");
