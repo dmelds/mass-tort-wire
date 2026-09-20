@@ -204,7 +204,7 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 5;
+var SETTINGS_VERSION = 6;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
@@ -214,7 +214,10 @@ var DEFAULTS = {
   blockedSources: [
     "Yahoo Sports", "sports.yahoo.com", "BVM Sports", "bvmsports.com",
     "t.co", "x.com", "twitter.com", "bit.ly", "lnkd.in", "buff.ly",
-    "Event Marketer", "eventmarketer.com", "adland.tv"
+    "Event Marketer", "eventmarketer.com", "adland.tv",
+    // Rewrites one story into a new headline every few minutes, so each rewrite is a
+    // fresh link and earns a NEW badge. Eight variants of one Bayer story in one scan.
+    "AD HOC NEWS", "ad-hoc-news.de"
   ],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
