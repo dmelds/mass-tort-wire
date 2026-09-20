@@ -10,9 +10,13 @@
 //   "topics":  ["AFFF lawsuit", ...],       // optional: items get a `matched` list
 //   "days":    30,                          // optional: drop dated items older than this
 //   "perFeed": 8,                           // optional: items kept per feed (max 15)
-//   "blockSources": ["Yahoo Sports", "sports.yahoo.com"]
+//   "blockSources": ["Yahoo Sports", "sports.yahoo.com"],
 //                                           // optional: drop items from these publishers
 //                                           // (a name, or a domain when the entry has a dot)
+//   "trustSources": ["Reuters", "reuters.com"]
+//                                           // optional: publishers exempt from the topic
+//                                           // check on a topic search, so a story that
+//                                           // never names the term is still kept
 // }
 //
 // Returns { items: [...], feeds: [...] }.
@@ -244,9 +248,10 @@ function matchTopics(item, terms) {
     .map(({ topic }) => topic);
 }
 
-// Publisher blocklist: entries with a dot match the publisher's domain (or its subdomains),
-// others match the publisher name, case-insensitively.
-function makeBlocker(list) {
+// Publisher list matcher, used for both the blocklist and the trusted list: entries with a
+// dot match the publisher's domain (or its subdomains), others match the publisher name,
+// case-insensitively.
+function makeSourceMatcher(list) {
   const names = [], domains = [];
   list.forEach((raw) => {
     const e = String(raw).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
@@ -283,7 +288,7 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "POST only" }) };
   }
 
-  let urls, topics, days, perFeed, blockSources;
+  let urls, topics, days, perFeed, blockSources, trustSources;
   try {
     const body = JSON.parse(event.body);
     const seenUrls = new Set();
@@ -302,6 +307,7 @@ exports.handler = async (event) => {
     days = Number(body.days) > 0 ? Number(body.days) : 0;
     perFeed = Math.min(Math.max(Number(body.perFeed) || 8, 1), 15);
     blockSources = Array.isArray(body.blockSources) ? body.blockSources.slice(0, 50) : [];
+    trustSources = Array.isArray(body.trustSources) ? body.trustSources.slice(0, 50) : [];
     if (!urls.length) throw new Error("no urls");
   } catch {
     return { statusCode: 400, headers, body: JSON.stringify({ error: "bad_body" }) };
@@ -321,7 +327,8 @@ exports.handler = async (event) => {
 
   const cutoff = days ? new Date(Date.now() - days * 86400000).toISOString().slice(0, 10) : "";
   const terms = topicTerms(topics);
-  const blocked = makeBlocker(blockSources);
+  const blocked = makeSourceMatcher(blockSources);
+  const trusted = makeSourceMatcher(trustSources);
   const seen = new Map();
   const items = [];
   const norm = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -334,8 +341,12 @@ exports.handler = async (event) => {
     // A topic search reports which query found an item, not what the item is about. A wire
     // service republishing a film premiere came back under "Roundup settlement" and wore
     // that tag. Keep only the items whose own headline or summary carries the topic.
+    // A trusted publisher is exempt: Reuters writing "forever chemicals" rather than PFAS
+    // is still covering the topic, and the search finding it there is evidence enough.
     const ownTerms = rep.topic ? topicTerms([rep.topic]) : null;
-    const onTopic = ownTerms ? allowed.filter((i) => matchTopics(i, ownTerms).length) : allowed;
+    const onTopic = ownTerms
+      ? allowed.filter((i) => trusted(i) || matchTopics(i, ownTerms).length)
+      : allowed;
     rep.offtopic = allowed.length - onTopic.length;
 
     const kept = onTopic
