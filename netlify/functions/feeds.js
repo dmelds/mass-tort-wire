@@ -214,6 +214,12 @@ async function fetchFeed(entry) {
 // Topic matching: drop generic legal words so "Roundup settlement" matches any Roundup post.
 const GENERIC = /\b(lawsuits?|litigation|settlements?|claims?|mdl|class action|verdicts?)\b/gi;
 
+// Terms that are also ordinary English words. "Roundup" names a herbicide and a news digest,
+// so matching the word alone tags faith, sports and regional roundups as mass tort coverage.
+const AMBIGUOUS_TERMS = { roundup: 1 };
+
+const LEGAL_WORDS = /\b(lawsuits?|litigation|settlements?|verdicts?|mdl|class action|claims?|court|judge|jury|trial|plaintiffs?|attorneys?|sued?|suing|damages|complaint|defendants?)\b/i;
+
 function topicTerms(topics) {
   return topics
     .map((t) => {
@@ -225,10 +231,15 @@ function topicTerms(topics) {
 
 function matchTopics(item, terms) {
   const hay = (item.title + " " + item.summary).toLowerCase();
+  let legal = null;
   return terms
     .filter(({ term }) => {
       const re = new RegExp("\\b" + term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[\s-]+/g, "[\\s-]+") + "\\b", "i");
-      return re.test(hay);
+      if (!re.test(hay)) return false;
+      if (!AMBIGUOUS_TERMS[term]) return true;
+      // Matched an everyday word, so the item has to read like litigation news to count.
+      if (legal === null) legal = LEGAL_WORDS.test(hay);
+      return legal;
     })
     .map(({ topic }) => topic);
 }
@@ -317,12 +328,20 @@ exports.handler = async (event) => {
 
   reports.forEach((rep) => {
     const inWindow = rep.items.filter((i) => !cutoff || !i.date || i.date >= cutoff);
-    const kept = inWindow
-      .filter((i) => !blocked(i))
+    const allowed = inWindow.filter((i) => !blocked(i));
+    rep.blocked = inWindow.length - allowed.length;
+
+    // A topic search reports which query found an item, not what the item is about. A wire
+    // service republishing a film premiere came back under "Roundup settlement" and wore
+    // that tag. Keep only the items whose own headline or summary carries the topic.
+    const ownTerms = rep.topic ? topicTerms([rep.topic]) : null;
+    const onTopic = ownTerms ? allowed.filter((i) => matchTopics(i, ownTerms).length) : allowed;
+    rep.offtopic = allowed.length - onTopic.length;
+
+    const kept = onTopic
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .slice(0, perFeed);
-    rep.blocked = inWindow.length - inWindow.filter((i) => !blocked(i)).length;
-    rep.found = kept.length;  // in window, not blocked, before cross-feed dedupe
+    rep.found = kept.length;  // in window, not blocked, on topic, before cross-feed dedupe
     rep.count = 0;           // unique items this feed added
     kept.forEach((i) => {
       const key = dedupeKey(i.url);
