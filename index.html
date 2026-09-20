@@ -204,7 +204,7 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 4;
+var SETTINGS_VERSION = 5;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
@@ -213,7 +213,8 @@ var DEFAULTS = {
   // a bare tweet as a story. They are blocked by the host the item resolves to.
   blockedSources: [
     "Yahoo Sports", "sports.yahoo.com", "BVM Sports", "bvmsports.com",
-    "t.co", "x.com", "twitter.com", "bit.ly", "lnkd.in", "buff.ly"
+    "t.co", "x.com", "twitter.com", "bit.ly", "lnkd.in", "buff.ly",
+    "Event Marketer", "eventmarketer.com", "adland.tv"
   ],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
@@ -465,7 +466,19 @@ function gnews(q) {
   return "https://news.google.com/rss/search?q=" + encodeURIComponent(q) + "&hl=en-US&gl=US&ceid=US:en";
 }
 
+// "Roundup" names a herbicide and an everyday news digest, so searching it plainly returns
+// faith, sports and regional roundups. A term like that is searched paired with a legal word.
+// Every other term keeps the plain search, because pairing them finds nothing: "AFFF lawsuit"
+// and "AFFF settlement" as phrases return no articles at all, while plain AFFF returns 30.
+var AMBIGUOUS_TERMS = { roundup: 1 };
+var TOPIC_PAIRS = ["settlement", "lawsuit", "litigation", "MDL", "verdict", "trial", "deal"];
+
 function googleNewsUrl(topic) {
+  var term = coreTerm(topic).replace(/"/g, "");
+  if (AMBIGUOUS_TERMS[term.toLowerCase()]) {
+    var phrases = TOPIC_PAIRS.map(function (w) { return '"' + term + " " + w + '"'; });
+    return gnews("(" + phrases.join(" OR ") + ")" + whenClause());
+  }
   return gnews(topic + whenClause());
 }
 
