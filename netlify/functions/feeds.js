@@ -238,7 +238,8 @@ function matchTopics(item, terms) {
   let legal = null;
   return terms
     .filter(({ term }) => {
-      const re = new RegExp("\\b" + term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[\s-]+/g, "[\\s-]+") + "\\b", "i");
+      // Trailing (?:e?s)? so "hair relaxer" matches a headline saying "Hair Relaxers".
+      const re = new RegExp("\\b" + term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[\s-]+/g, "[\\s-]+") + "(?:e?s)?\\b", "i");
       if (!re.test(hay)) return false;
       if (!AMBIGUOUS_TERMS[term]) return true;
       // Matched an everyday word, so the item has to read like litigation news to count.
@@ -338,13 +339,14 @@ exports.handler = async (event) => {
     const allowed = inWindow.filter((i) => !blocked(i));
     rep.blocked = inWindow.length - allowed.length;
 
-    // A topic search reports which query found an item, not what the item is about. A wire
-    // service republishing a film premiere came back under "Roundup settlement" and wore
-    // that tag. Keep only the items whose own headline or summary carries the topic.
-    // A trusted publisher is exempt: Reuters writing "forever chemicals" rather than PFAS
-    // is still covering the topic, and the search finding it there is evidence enough.
+    // A search for an everyday word answers with everyday news: "Roundup settlement" brought
+    // back a film premiere and a faith digest, both wearing the topic as a tag. Those topics
+    // make an item prove itself by carrying the term. A specific term like PFAS or AFFF needs
+    // no such proof, and demanding it costs real coverage, because a Google News feed carries
+    // no summary and only the headline is left to match. A trusted publisher is always exempt.
     const ownTerms = rep.topic ? topicTerms([rep.topic]) : null;
-    const onTopic = ownTerms
+    const needsProof = !!ownTerms && ownTerms.some(({ term }) => AMBIGUOUS_TERMS[term]);
+    const onTopic = needsProof
       ? allowed.filter((i) => trusted(i) || matchTopics(i, ownTerms).length)
       : allowed;
     rep.offtopic = allowed.length - onTopic.length;
