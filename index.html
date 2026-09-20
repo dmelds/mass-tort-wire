@@ -204,12 +204,17 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 3;
+var SETTINGS_VERSION = 4;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
-  blockedSources: ["Yahoo Sports", "sports.yahoo.com", "BVM Sports", "bvmsports.com"],
+  // Link wrappers carry a headline and no article, so a firm name search can surface
+  // a bare tweet as a story. They are blocked by the host the item resolves to.
+  blockedSources: [
+    "Yahoo Sports", "sports.yahoo.com", "BVM Sports", "bvmsports.com",
+    "t.co", "x.com", "twitter.com", "bit.ly", "lnkd.in", "buff.ly"
+  ],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
     "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
