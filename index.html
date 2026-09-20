@@ -24,6 +24,7 @@
     --panel: #F4F1E8;
     --news: #2E5E7E;
     --firms: #3E6B4F;
+    --ai: #6B4A7A;
     --bad: #A2412A;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -49,6 +50,7 @@
   .channel-status { margin-left: auto; display: flex; gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
   .channel-status .news { color: var(--news); }
   .channel-status .firms { color: var(--firms); }
+  .channel-status .ai { color: var(--ai); }
 
   #config { display: none; border-bottom: 1px solid var(--rule); background: var(--panel); padding: 16px 20px; }
   #config.open { display: block; }
@@ -91,6 +93,7 @@
   .filters button.active { color: var(--paper); border-color: transparent; background: var(--ink); }
   .filters button.active[data-f="news"] { background: var(--news); }
   .filters button.active[data-f="firms"] { background: var(--firms); }
+  .filters button.active[data-f="ai"] { background: var(--ai); }
 
   main { padding: 16px 20px 40px; }
   .empty-state { text-align: center; padding: 64px 20px; }
@@ -103,9 +106,11 @@
   .item:active { background: var(--panel); }
   .item.news { border-left-color: var(--news); }
   .item.firms { border-left-color: var(--firms); }
+  .item.ai { border-left-color: var(--ai); }
   .item .src { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; margin-bottom: 4px; }
   .item.news .src { color: var(--news); }
   .item.firms .src { color: var(--firms); }
+  .item.ai .src { color: var(--ai); }
   .item .new { background: var(--amber); color: var(--paper); padding: 1px 5px; margin-left: 6px; letter-spacing: 0.1em; }
   .item .title { font-family: 'Spectral', Georgia, serif; font-size: 16px; font-weight: 600; line-height: 1.3; }
   .item .sum { color: var(--dim); font-size: 13px; line-height: 1.4; margin-top: 4px; }
@@ -135,6 +140,7 @@
   <div class="channel-status">
     <span class="news">NEWS <span id="st-news"></span></span>
     <span class="firms">FIRMS <span id="st-firms"></span></span>
+    <span class="ai">AI <span id="st-ai"></span></span>
   </div>
 </div>
 
@@ -166,6 +172,14 @@
   <textarea id="firmFeedsInput" rows="5"></textarea>
   <p class="hint">A blog page URL works if the page lists its feed. Settings save on this device.</p>
 
+  <div class="label">AI SEARCHES (ONE PER LINE)</div>
+  <textarea id="aiSearchInput" rows="8"></textarea>
+  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. The first six lines follow how judges, courts and bar regulators handle AI. The last two follow the suits filed against the AI companies.</p>
+
+  <div class="label">AI FEEDS (ONE PER LINE)</div>
+  <textarea id="aiFeedsInput" rows="3"></textarea>
+  <p class="hint">Publications that cover AI in law practice. These run unfiltered, so everything they publish in the window arrives.</p>
+
   <div class="label">SOURCE HEALTH (LAST SCAN)</div>
   <div id="healthBox"><p class="hint">Run a scan to see which sources respond.</p></div>
 
@@ -178,12 +192,13 @@
   <button data-f="all" class="active">ALL (<span id="ct-all">0</span>)</button>
   <button data-f="news">NEWS WIRE (<span id="ct-news">0</span>)</button>
   <button data-f="firms">FIRM WIRE (<span id="ct-firms">0</span>)</button>
+  <button data-f="ai">AI WIRE (<span id="ct-ai">0</span>)</button>
 </div>
 
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; NO API KEYS &middot; SETTINGS SAVED ON THIS DEVICE
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; NO API KEYS &middot; SETTINGS SAVED ON THIS DEVICE
 </footer>
 
 <script>
@@ -202,13 +217,28 @@ var DEFAULTS = {
     "https://gorilaw.com/blog/",
     "https://www.lawsuit-information-center.com/"
   ],
+  aiSearches: [
+    "AI hallucinated citations sanctions",
+    "judge sanctions lawyer ChatGPT filing",
+    "court rules artificial intelligence filings",
+    "judiciary artificial intelligence policy courts",
+    "bar association guidance lawyers AI use",
+    "AI generated evidence court judge",
+    "AI chatbot teen suicide lawsuit",
+    "OpenAI lawsuit"
+  ],
+  aiFeeds: [
+    "https://www.lawnext.com/feed",
+    "https://www.artificiallawyer.com/feed/"
+  ],
   windowDays: 7,
   topicsOnly: false
 };
 var STORE_KEY = "mtw:settings:v2";
 var SEEN_KEY = "mtw:seen:v2";
 var BATCH = 12;               // feeds function limit per call
-var CHANNELS = { news: "NEWS WIRE", firms: "FIRM WIRE" };
+var CHANNELS = { news: "NEWS WIRE", firms: "FIRM WIRE", ai: "AI WIRE" };
+var CHANNEL_KEYS = ["news", "firms", "ai"];
 var OUTLET_NAMES = { "reuters.com": "Reuters", "law360.com": "Law360", "yahoo.com": "Yahoo News" };
 
 // ── Storage (guarded: private browsing can refuse it) ──
@@ -224,7 +254,7 @@ var settings = Object.assign({}, DEFAULTS, load(STORE_KEY, {}));
 var seenBefore = load(SEEN_KEY, null);   // null on first visit: no NEW badges
 var items = [];
 var errors = {};
-var health = { news: [], firms: [] };
+var health = { news: [], firms: [], ai: [] };
 var filter = "all";
 var scanned = false;
 var scanning = false;
@@ -251,6 +281,8 @@ function fillInputs() {
   document.getElementById("newsFeedsInput").value = settings.newsFeeds.join("\n");
   document.getElementById("firmWatchInput").value = settings.firmWatch.join("\n");
   document.getElementById("firmFeedsInput").value = settings.firmFeeds.join("\n");
+  document.getElementById("aiSearchInput").value = settings.aiSearches.join("\n");
+  document.getElementById("aiFeedsInput").value = settings.aiFeeds.join("\n");
   document.getElementById("windowSel").value = String(settings.windowDays);
   var tb = document.getElementById("topicsOnlyBtn");
   tb.classList.toggle("on", settings.topicsOnly);
@@ -301,6 +333,12 @@ document.getElementById("firmWatchInput").addEventListener("change", function ()
 });
 document.getElementById("firmFeedsInput").addEventListener("change", function () {
   settings.firmFeeds = linesOf("firmFeedsInput"); persist();
+});
+document.getElementById("aiSearchInput").addEventListener("change", function () {
+  settings.aiSearches = linesOf("aiSearchInput"); persist();
+});
+document.getElementById("aiFeedsInput").addEventListener("change", function () {
+  settings.aiFeeds = linesOf("aiFeedsInput"); persist();
 });
 
 document.getElementById("windowSel").onchange = function () {
@@ -454,6 +492,19 @@ function fetchFirms() {
     .then(function (results) { return mergeChannel(results, "firms"); });
 }
 
+// Each AI line is the search, run verbatim. The line also tags every item it returns,
+// so an AI story carries the beat it came from even under MY TOPICS ONLY.
+function aiSearches() {
+  return settings.aiSearches.slice(0, 12).map(function (q) {
+    return { url: gnews(q + whenClause()), topic: q };
+  });
+}
+
+function fetchAI() {
+  return Promise.allSettled([runBatches(aiSearches(), 6), runBatches(settings.aiFeeds, 8)])
+    .then(function (results) { return mergeChannel(results, "ai"); });
+}
+
 function mergeChannel(results, ch) {
   var ok = results.filter(function (r) { return r.status === "fulfilled"; });
   if (!ok.length) throw results[0].reason;
@@ -480,6 +531,8 @@ function runScan() {
   settings.newsFeeds = linesOf("newsFeedsInput");
   settings.firmWatch = linesOf("firmWatchInput");
   settings.firmFeeds = linesOf("firmFeedsInput");
+  settings.aiSearches = linesOf("aiSearchInput");
+  settings.aiFeeds = linesOf("aiFeedsInput");
   persist();
 
   var btn = document.getElementById("scanBtn");
@@ -487,11 +540,11 @@ function runScan() {
   btn.textContent = "SCANNING\u2026";
   items = [];
   errors = {};
-  health = { news: [], firms: [] };
+  health = { news: [], firms: [], ai: [] };
   scanned = true;
   renderFeed();
   renderHealth();
-  ["news", "firms"].forEach(function (ch) { setStatus(ch, "scanning"); });
+  CHANNEL_KEYS.forEach(function (ch) { setStatus(ch, "scanning"); });
 
   function run(ch, fn) {
     return fn().then(function (res) {
@@ -506,7 +559,7 @@ function runScan() {
     });
   }
 
-  Promise.allSettled([run("news", fetchNews), run("firms", fetchFirms)]).then(function () {
+  Promise.allSettled([run("news", fetchNews), run("firms", fetchFirms), run("ai", fetchAI)]).then(function () {
     // Remember everything shown so the next visit can mark what's new.
     var keys = items.map(function (i) { return i.url; });
     var prior = seenBefore || [];
@@ -542,7 +595,7 @@ function sortItems(list) {
 function renderHealth() {
   var box = document.getElementById("healthBox");
   var rows = [];
-  ["news", "firms"].forEach(function (ch) {
+  CHANNEL_KEYS.forEach(function (ch) {
     health[ch].forEach(function (f) {
       var note = f.status === "error" ? f.error
         : f.status === "empty" ? (f.blocked ? "all " + f.blocked + " blocked" : "nothing in window")
@@ -565,7 +618,7 @@ function renderFeed() {
     : items;
 
   document.getElementById("ct-all").textContent = pool.length;
-  ["news", "firms"].forEach(function (ch) {
+  CHANNEL_KEYS.forEach(function (ch) {
     document.getElementById("ct-" + ch).textContent = pool.filter(function (i) { return i.channel === ch; }).length;
   });
 
@@ -576,7 +629,7 @@ function renderFeed() {
     html += '<div class="notice bad">' + CHANNELS[ch] + ' \u2715 ' + esc(errors[ch]) + '</div>';
   });
 
-  ["news", "firms"].forEach(function (ch) {
+  CHANNEL_KEYS.forEach(function (ch) {
     var failed = health[ch].filter(function (f) { return f.status === "error"; });
     if (!failed.length) return;
     html += '<div class="notice">' + CHANNELS[ch] + ': ' + failed.length + ' OF ' + health[ch].length +
