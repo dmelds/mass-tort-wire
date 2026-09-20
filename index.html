@@ -155,7 +155,7 @@
 
   <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
   <textarea id="outletsInput" rows="3"></textarea>
-  <p class="hint">Each outlet runs one Google News search limited to that site. Leave blank to turn this off.</p>
+  <p class="hint">Each outlet runs one Google News search limited to that site, and requires a topic term in the headline. Leave blank to turn this off.</p>
 
   <div class="label">BLOCKED SOURCES (ONE PER LINE)</div>
   <textarea id="blockedInput" rows="2"></textarea>
@@ -203,7 +203,10 @@
 
 <script>
 // ── Defaults ──
+// Bump when a default below has to reach devices that already saved their settings.
+var SETTINGS_VERSION = 3;
 var DEFAULTS = {
+  version: SETTINGS_VERSION,
   topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
   blockedSources: ["Yahoo Sports", "sports.yahoo.com", "BVM Sports", "bvmsports.com"],
@@ -250,7 +253,22 @@ function save(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
 }
 
-var settings = Object.assign({}, DEFAULTS, load(STORE_KEY, {}));
+var storedSettings = load(STORE_KEY, {});
+var settings = Object.assign({}, DEFAULTS, storedSettings);
+
+// A saved setting outranks its default permanently, so a device that has run one scan keeps
+// the AI searches and blocked sources it saved that day and never sees corrected ones.
+// A version bump reapplies the sources this app maintains, and leaves your own lists alone.
+if ((storedSettings.version || 0) < SETTINGS_VERSION) {
+  settings.aiSearches = DEFAULTS.aiSearches.slice();
+  settings.aiFeeds = DEFAULTS.aiFeeds.slice();
+  settings.blockedSources = (settings.blockedSources || []).slice();
+  DEFAULTS.blockedSources.forEach(function (b) {
+    if (settings.blockedSources.indexOf(b) === -1) settings.blockedSources.push(b);
+  });
+  settings.version = SETTINGS_VERSION;
+  save(STORE_KEY, settings);
+}
 var seenBefore = load(SEEN_KEY, null);   // null on first visit: no NEW badges
 var items = [];
 var errors = {};
@@ -457,9 +475,15 @@ function coreTerm(t) {
 var LEGAL_CONTEXT = "(lawsuit OR lawsuits OR litigation OR settlement OR verdict OR MDL OR court OR jury)";
 var OUTLET_EXCLUDES = { "yahoo.com": " -site:sports.yahoo.com" };
 
+// A site: search on a generic term like "Roundup" returns most of what the outlet published,
+// and the newest ten win the slot, which is how MLB roundups reach a mass tort wire.
+// intitle: makes the outlet put the term in the headline before the item counts.
 function outletSearches() {
   var terms = settings.topics.map(coreTerm).filter(Boolean)
-    .map(function (t) { return '"' + t.replace(/"/g, "") + '"'; });
+    .map(function (t) {
+      var term = t.replace(/"/g, "");
+      return /\s/.test(term) ? 'intitle:"' + term + '"' : "intitle:" + term;
+    });
   if (!terms.length) return [];
   return settings.outlets.map(function (d) {
     return {
