@@ -121,7 +121,7 @@
     font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.02em;
     padding: 7px 10px; white-space: nowrap; flex-shrink: 0;
   }
-  .tchip.firm { color: var(--firms); border-color: var(--firms); }
+  .tchip.none { color: var(--dim); }
   .tchip .n { color: var(--dim); margin-left: 4px; }
   .tchip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .tchip.on .n { color: var(--rule); }
@@ -563,8 +563,66 @@ function tagLabel(t) {
   return String(t).replace(/intitle:/gi, "").replace(/"/g, "").replace(/\s+/g, " ").trim();
 }
 
+// ── Topic proof ──
+// A topic search tags everything it returns, so "hair relaxer lawsuit" arrived on a story about
+// OpenAI and "Depo-Provera lawsuit" on an Ozempic story. A story belongs to a topic only when its
+// own headline or summary names the topic, or a name the press uses for it.
+var TOPIC_ALIASES = {
+  "pfas": ["forever chemical", "pfoa", "pfos"],
+  "afff": ["firefighting foam", "firefighter foam", "fire-fighting foam", "aqueous film"],
+  "depo-provera": ["medroxyprogesterone"],
+  "hair relaxer": ["relaxer", "hair straightener", "hair product"],
+  "roundup": ["glyphosate", "weedkiller", "weed killer"]
+};
+
+// "Roundup" also names a news digest: "UK Litigation Roundup: Here's What You Missed",
+// "Pennsylvania Roundup: Coalition secures settlement". The digest form is a heading followed by
+// a colon, or a word like Litigation or Weekly in front. Those don't count as the herbicide.
+var DIGEST_BEFORE = /\b(litigation|legal|law|news|weekly|daily|week|morning|evening|friday|monday|state|regional)\s+roundups?\b/i;
+var DIGEST_AFTER = /\broundups?\s*:/i;
+
+var topicRx = {};
+function topicPattern(topic) {
+  if (topicRx[topic]) return topicRx[topic];
+  var core = coreTerm(topic).toLowerCase();
+  var names = [core].concat(TOPIC_ALIASES[core] || []);
+  var re = new RegExp("\\b(" + names.map(function (n) {
+    return rx(n).replace(/[\s-]+/g, "[\\s-]+");
+  }).join("|") + ")(?:e?s)?\\b", "gi");
+  topicRx[topic] = { core: core, re: re };
+  return topicRx[topic];
+}
+
+function topicProven(topic, text) {
+  var p = topicPattern(topic);
+  p.re.lastIndex = 0;
+  if (!AMBIGUOUS_TERMS[p.core]) return p.re.test(text);
+  // Ambiguous term: an alias proves it outright; the bare word has to be out of digest form.
+  var m, bareOk = false;
+  while ((m = p.re.exec(text))) {
+    if (m[1].toLowerCase() !== p.core) return true;
+    bareOk = true;
+  }
+  return bareOk && !DIGEST_BEFORE.test(text) && !DIGEST_AFTER.test(text);
+}
+
+function itemText(item) {
+  return (item.title || "") + " " + (item.summary || "");
+}
+
+// Your tracked topics that this story actually covers.
+function topicsOf(item) {
+  var text = itemText(item);
+  return settings.topics.filter(function (t) { return topicProven(t, text); });
+}
+
+// Tags shown on a story: firms it names, topics it proves, and the AI search or one-off
+// Google News search it came from. A tracked topic the story doesn't mention is left off.
 function tagsOf(item) {
-  return (item.watch || []).concat(item.matched || []);
+  var tracked = {};
+  settings.topics.forEach(function (t) { tracked[t] = 1; });
+  var beats = (item.matched || []).filter(function (t) { return !tracked[t]; });
+  return (item.watch || []).concat(topicsOf(item), beats);
 }
 
 function queryWords(q) {
@@ -593,25 +651,21 @@ function highlight(text, words) {
   }).join("");
 }
 
+// Your tracked topics, in your order, each with how many stories in this channel cover it.
 function renderTopicBar(list) {
   var bar = document.getElementById("topicBar");
   var scrollLeft = bar.scrollLeft;
-  var counts = {}, firm = {};
+  if (activeTopic && settings.topics.indexOf(activeTopic) === -1) activeTopic = "";
+  if (!settings.topics.length) { bar.innerHTML = ""; return; }
+  var counts = {};
+  settings.topics.forEach(function (t) { counts[t] = 0; });
   list.forEach(function (i) {
-    (i.watch || []).forEach(function (t) { counts[t] = (counts[t] || 0) + 1; firm[t] = 1; });
-    (i.matched || []).forEach(function (t) { if (!firm[t]) counts[t] = (counts[t] || 0) + 1; });
+    topicsOf(i).forEach(function (t) { counts[t]++; });
   });
-  if (activeTopic && !counts[activeTopic]) counts[activeTopic] = 0;
-  var keys = Object.keys(counts).sort(function (a, b) {
-    if (a === activeTopic) return -1;
-    if (b === activeTopic) return 1;
-    return counts[b] - counts[a] || tagLabel(a).localeCompare(tagLabel(b));
-  });
-  if (!keys.length) { bar.innerHTML = ""; return; }
-  bar.innerHTML = '<span class="tlabel">TOPICS</span>' + keys.map(function (t) {
-    return '<button class="tchip' + (firm[t] ? ' firm' : '') + (t === activeTopic ? ' on' : '') +
+  bar.innerHTML = '<span class="tlabel">TOPICS</span>' + settings.topics.map(function (t) {
+    return '<button class="tchip' + (t === activeTopic ? ' on' : '') + (counts[t] ? '' : ' none') +
       '" data-topic="' + esc(t) + '" aria-pressed="' + (t === activeTopic) + '">' +
-      esc(tagLabel(t)) + '<span class="n">' + counts[t] + '</span></button>';
+      esc(coreTerm(t)) + '<span class="n">' + counts[t] + '</span></button>';
   }).join("");
   bar.scrollLeft = scrollLeft;
 }
@@ -777,7 +831,7 @@ function fetchFirms() {
 }
 
 // Each AI line is the search, run verbatim. The line also tags every item it returns,
-// so an AI story carries the beat it came from even under MY TOPICS ONLY.
+// so an AI story shows the beat it came from. That tag is not one of your topics.
 function aiSearches() {
   return settings.aiSearches.slice(0, 12).map(function (q) {
     return { url: gnews(q + whenClause()), topic: q };
@@ -944,8 +998,10 @@ function renderHealth() {
 }
 
 function renderFeed() {
+  // MY TOPICS ONLY keeps a story when it names one of your tracked topics. An AI search line
+  // or a topic search that merely returned the story doesn't count.
   var pool = settings.topicsOnly
-    ? items.filter(function (i) { return i.matched && i.matched.length; })
+    ? items.filter(function (i) { return topicsOf(i).length; })
     : items;
 
   // The topic bar lists every tag in the current channel, so tapping one never empties the bar.
@@ -954,7 +1010,7 @@ function renderFeed() {
   var words = queryWords(query);
   var searching = !!(words.length || activeTopic);
   var hits = pool.filter(function (i) {
-    return (!activeTopic || tagsOf(i).indexOf(activeTopic) !== -1) && matchesQuery(i, words);
+    return (!activeTopic || topicsOf(i).indexOf(activeTopic) !== -1) && matchesQuery(i, words);
   });
 
   // Channel counts follow the search, so each tab shows how many of its stories match.
@@ -992,8 +1048,10 @@ function renderFeed() {
   }
 
   visible.forEach(function (item) {
-    var tags = (item.watch || []).map(function (t) { return '<span class="tag firm">' + esc(tagLabel(t)) + '</span>'; }).join("")
-      + (item.matched || []).map(function (t) { return '<span class="tag">' + esc(tagLabel(t)) + '</span>'; }).join("");
+    var watch = item.watch || [];
+    var tags = tagsOf(item).map(function (t) {
+      return '<span class="tag' + (watch.indexOf(t) !== -1 ? ' firm' : '') + '">' + esc(tagLabel(t)) + '</span>';
+    }).join("");
     html += '<a class="item ' + esc(item.channel) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
       + '<div class="src">' + CHANNELS[item.channel] + ' \u00B7 ' + esc(item.source || "\u2014")
       + (item.date ? ' \u00B7 ' + esc(item.date) : '')
