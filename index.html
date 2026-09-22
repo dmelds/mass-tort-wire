@@ -76,11 +76,13 @@
   .health .empty { color: var(--dim); }
   .health .error { color: var(--bad); }
 
-  .filters {
+  .bar {
     position: sticky; top: 0; z-index: 10;
     background: var(--paper);
     border-bottom: 1px solid var(--rule);
-    padding: 10px 16px;
+  }
+  .filters {
+    padding: 10px 16px 8px;
     display: flex; gap: 8px;
     overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
@@ -94,6 +96,42 @@
   .filters button.active[data-f="news"] { background: var(--news); }
   .filters button.active[data-f="firms"] { background: var(--firms); }
   .filters button.active[data-f="ai"] { background: var(--ai); }
+
+  .search { padding: 0 16px 10px; display: flex; gap: 8px; }
+  .search input[type=search] {
+    flex: 1; min-width: 0;
+    border: 1px solid var(--rule); background: var(--paper); border-radius: 0;
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif; font-size: 16px;
+    padding: 9px 12px; -webkit-appearance: none; appearance: none;
+  }
+  .search input[type=search]:focus { outline: none; border-color: var(--ink); }
+  .search input[type=search]::-webkit-search-cancel-button { display: none; }
+  #clearSearch[hidden] { display: none; }
+
+  .topicbar {
+    padding: 10px 16px; border-bottom: 1px solid var(--rule);
+    display: flex; gap: 6px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .topicbar:empty { display: none; }
+  .topicbar::-webkit-scrollbar { display: none; }
+  .topicbar .tlabel { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.15em; color: var(--dim); align-self: center; flex-shrink: 0; margin-right: 4px; }
+  .tchip {
+    background: var(--paper); border: 1px solid var(--rule); color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.02em;
+    padding: 7px 10px; white-space: nowrap; flex-shrink: 0;
+  }
+  .tchip.firm { color: var(--firms); border-color: var(--firms); }
+  .tchip .n { color: var(--dim); margin-left: 4px; }
+  .tchip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .tchip.on .n { color: var(--rule); }
+
+  .searchnote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--ink); }
+  .searchnote .q { font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; }
+  .searchnote button { background: none; border: 1px solid var(--ink); color: var(--ink); padding: 6px 10px; font-size: 10px; }
+  .searchnote .state { color: var(--dim); }
+  .searchnote .state.bad { color: var(--bad); }
+  mark { background: #F1DDB4; color: inherit; padding: 0 1px; }
 
   main { padding: 16px 20px 40px; }
   .empty-state { text-align: center; padding: 64px 20px; }
@@ -192,12 +230,20 @@
   </div>
 </div>
 
-<div class="filters">
-  <button data-f="all" class="active">ALL (<span id="ct-all">0</span>)</button>
-  <button data-f="news">NEWS WIRE (<span id="ct-news">0</span>)</button>
-  <button data-f="firms">FIRM WIRE (<span id="ct-firms">0</span>)</button>
-  <button data-f="ai">AI WIRE (<span id="ct-ai">0</span>)</button>
+<div class="bar">
+  <div class="filters">
+    <button data-f="all" class="active">ALL (<span id="ct-all">0</span>)</button>
+    <button data-f="news">NEWS WIRE (<span id="ct-news">0</span>)</button>
+    <button data-f="firms">FIRM WIRE (<span id="ct-firms">0</span>)</button>
+    <button data-f="ai">AI WIRE (<span id="ct-ai">0</span>)</button>
+  </div>
+  <div class="search">
+    <input type="search" id="searchInput" placeholder="Search a topic, firm or keyword" aria-label="Search the wire" autocomplete="off" enterkeyhint="search">
+    <button class="ghost" id="clearSearch" hidden>CLEAR</button>
+  </div>
 </div>
+
+<div class="topicbar" id="topicBar"></div>
 
 <main id="feed"></main>
 
@@ -293,6 +339,9 @@ var health = { news: [], firms: [], ai: [] };
 var filter = "all";
 var scanned = false;
 var scanning = false;
+var query = "";          // search box text, filters as you type
+var activeTopic = "";    // topic chip tapped in the topic bar
+var adhoc = {};          // Google News lookups run from the search box, keyed by lowercased query
 
 function persist() { save(STORE_KEY, settings); }
 
@@ -412,6 +461,183 @@ document.querySelectorAll(".filters button").forEach(function (b) {
     renderFeed();
   };
 });
+
+// ── Search ──
+var searchInput = document.getElementById("searchInput");
+var clearBtn = document.getElementById("clearSearch");
+
+function setQuery(q) {
+  query = q;
+  searchInput.value = q;
+  clearBtn.hidden = !(query || activeTopic);
+  renderFeed();
+}
+
+searchInput.addEventListener("input", function () {
+  query = searchInput.value;
+  clearBtn.hidden = !(query || activeTopic);
+  renderFeed();
+});
+searchInput.addEventListener("keydown", function (e) {
+  // Typing already filters what the scan loaded. Enter goes further and asks Google News.
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (query.trim()) searchGoogleNews(query.trim());
+    searchInput.blur();
+  } else if (e.key === "Escape") {
+    setQuery("");
+  }
+});
+clearBtn.onclick = function () {
+  activeTopic = "";
+  setQuery("");
+};
+
+document.getElementById("topicBar").addEventListener("click", function (e) {
+  var b = e.target.closest("button[data-topic]");
+  if (!b) return;
+  var t = b.getAttribute("data-topic");
+  activeTopic = activeTopic === t ? "" : t;
+  clearBtn.hidden = !(query || activeTopic);
+  renderFeed();
+});
+
+document.getElementById("feed").addEventListener("click", function (e) {
+  var b = e.target.closest("button[data-act]");
+  if (!b) return;
+  var q = query.trim();
+  if (!q) return;
+  if (b.getAttribute("data-act") === "gnews") searchGoogleNews(q);
+  if (b.getAttribute("data-act") === "track") trackTopic(q);
+});
+
+function isTracked(q) {
+  return settings.topics.some(function (v) { return v.toLowerCase() === q.toLowerCase(); });
+}
+
+function trackTopic(q) {
+  if (!isTracked(q)) { settings.topics.push(q); persist(); renderChips(); }
+  renderFeed();
+}
+
+// One Google News search for whatever is in the box. Results join the News Wire tagged with
+// the search, so the topic bar and the filter both pick them up. A story the scan already
+// has gets the tag instead of a second copy.
+function searchGoogleNews(q) {
+  var key = q.toLowerCase();
+  if (adhoc[key] && adhoc[key].state === "running") return;
+  adhoc[key] = { state: "running" };
+  renderFeed();
+  callFeeds([{ url: gnews(q + whenClause()), topic: q, label: q }], 15).then(function (res) {
+    health.news = health.news.concat(res.feeds);
+    var added = 0;
+    res.items.forEach(function (it) {
+      var tok = titleTokens(it.title);
+      var dup = null;
+      for (var k = 0; k < items.length; k++) {
+        if (items[k].url === it.url || sameStory(tok, titleTokens(items[k].title))) { dup = items[k]; break; }
+      }
+      if (dup) {
+        dup.matched = dup.matched || [];
+        if (dup.matched.indexOf(q) === -1) dup.matched.push(q);
+        return;
+      }
+      it.matched = it.matched || [];
+      if (it.matched.indexOf(q) === -1) it.matched.unshift(q);
+      it.watch = it.watch || [];
+      it.channel = "news";
+      items.push(it);
+      added++;
+    });
+    adhoc[key] = { state: "done", found: res.items.length, added: added };
+  }).catch(function (err) {
+    adhoc[key] = { state: "error", error: err && err.message ? err.message : "SEARCH FAILED" };
+  }).then(function () {
+    renderFeed();
+    renderHealth();
+  });
+}
+
+// Search lines carry operators ("intitle:AI intitle:court"). Show them as plain words.
+function tagLabel(t) {
+  return String(t).replace(/intitle:/gi, "").replace(/"/g, "").replace(/\s+/g, " ").trim();
+}
+
+function tagsOf(item) {
+  return (item.watch || []).concat(item.matched || []);
+}
+
+function queryWords(q) {
+  return tagLabel(q).toLowerCase().replace(/[^\w\s&.'-]/g, " ").split(/\s+/)
+    .filter(function (w) { return w && w !== "or"; });
+}
+
+// Every word in the box has to appear somewhere in the headline, summary, publisher or tags.
+function matchesQuery(item, words) {
+  if (!words.length) return true;
+  var hay = [item.title, item.summary, item.source].concat(tagsOf(item).map(tagLabel)).join(" ").toLowerCase();
+  return words.every(function (w) { return hay.indexOf(w) !== -1; });
+}
+
+function rx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+// Mark the searched words in a headline. One pass, and never inside an HTML entity.
+function highlight(text, words) {
+  var safe = esc(text);
+  var ws = words.filter(function (w) { return w.length > 1; })
+    .sort(function (a, b) { return b.length - a.length; });
+  if (!ws.length) return safe;
+  var re = new RegExp("(" + ws.map(function (w) { return rx(esc(w)); }).join("|") + ")", "gi");
+  return safe.split(/(&[a-z0-9#]+;)/i).map(function (part) {
+    return /^&[a-z0-9#]+;$/i.test(part) ? part : part.replace(re, "<mark>$1</mark>");
+  }).join("");
+}
+
+function renderTopicBar(list) {
+  var bar = document.getElementById("topicBar");
+  var scrollLeft = bar.scrollLeft;
+  var counts = {}, firm = {};
+  list.forEach(function (i) {
+    (i.watch || []).forEach(function (t) { counts[t] = (counts[t] || 0) + 1; firm[t] = 1; });
+    (i.matched || []).forEach(function (t) { if (!firm[t]) counts[t] = (counts[t] || 0) + 1; });
+  });
+  if (activeTopic && !counts[activeTopic]) counts[activeTopic] = 0;
+  var keys = Object.keys(counts).sort(function (a, b) {
+    if (a === activeTopic) return -1;
+    if (b === activeTopic) return 1;
+    return counts[b] - counts[a] || tagLabel(a).localeCompare(tagLabel(b));
+  });
+  if (!keys.length) { bar.innerHTML = ""; return; }
+  bar.innerHTML = '<span class="tlabel">TOPICS</span>' + keys.map(function (t) {
+    return '<button class="tchip' + (firm[t] ? ' firm' : '') + (t === activeTopic ? ' on' : '') +
+      '" data-topic="' + esc(t) + '" aria-pressed="' + (t === activeTopic) + '">' +
+      esc(tagLabel(t)) + '<span class="n">' + counts[t] + '</span></button>';
+  }).join("");
+  bar.scrollLeft = scrollLeft;
+}
+
+function searchNote(count) {
+  var q = query.trim();
+  var parts = [];
+  if (activeTopic) parts.push('TOPIC <span class="q">' + esc(tagLabel(activeTopic)) + '</span>');
+  if (q) parts.push('<span class="q">“' + esc(q) + '”</span>');
+  var html = '<div class="notice searchnote"><span>' + count + (count === 1 ? ' MATCH' : ' MATCHES') +
+    ' FOR ' + parts.join(' + ') + '</span>';
+  if (q) {
+    var st = adhoc[q.toLowerCase()];
+    if (!st) {
+      html += '<button data-act="gnews">SEARCH GOOGLE NEWS</button>';
+    } else if (st.state === "running") {
+      html += '<span class="state">SEARCHING GOOGLE NEWS…</span>';
+    } else if (st.state === "error") {
+      html += '<span class="state bad">' + esc(st.error) + '</span><button data-act="gnews">RETRY</button>';
+    } else {
+      html += '<span class="state">GOOGLE NEWS: ' + st.found + ' FOUND, ' + st.added + ' NEW TO THIS SCAN</span>';
+    }
+    if (!isTracked(q)) html += '<button data-act="track">TRACK AS TOPIC</button>';
+  }
+  return html + '</div>';
+}
 
 function setStatus(ch, s) {
   var map = { scanning: "\u2026", done: "\u2713", empty: "0", error: "\u2715" };
@@ -644,6 +870,7 @@ function runScan() {
   btn.textContent = "SCANNING\u2026";
   items = [];
   errors = {};
+  adhoc = {};
   health = { news: [], firms: [], ai: [] };
   scanned = true;
   renderFeed();
@@ -721,12 +948,22 @@ function renderFeed() {
     ? items.filter(function (i) { return i.matched && i.matched.length; })
     : items;
 
-  document.getElementById("ct-all").textContent = pool.length;
-  CHANNEL_KEYS.forEach(function (ch) {
-    document.getElementById("ct-" + ch).textContent = pool.filter(function (i) { return i.channel === ch; }).length;
+  // The topic bar lists every tag in the current channel, so tapping one never empties the bar.
+  renderTopicBar(filter === "all" ? pool : pool.filter(function (i) { return i.channel === filter; }));
+
+  var words = queryWords(query);
+  var searching = !!(words.length || activeTopic);
+  var hits = pool.filter(function (i) {
+    return (!activeTopic || tagsOf(i).indexOf(activeTopic) !== -1) && matchesQuery(i, words);
   });
 
-  var visible = sortItems(filter === "all" ? pool : pool.filter(function (i) { return i.channel === filter; }));
+  // Channel counts follow the search, so each tab shows how many of its stories match.
+  document.getElementById("ct-all").textContent = hits.length;
+  CHANNEL_KEYS.forEach(function (ch) {
+    document.getElementById("ct-" + ch).textContent = hits.filter(function (i) { return i.channel === ch; }).length;
+  });
+
+  var visible = sortItems(filter === "all" ? hits : hits.filter(function (i) { return i.channel === filter; }));
   var html = "";
 
   Object.keys(errors).forEach(function (ch) {
@@ -746,21 +983,23 @@ function renderFeed() {
     html += '<div class="notice">' + newCount + ' NEW SINCE YOUR LAST SCAN</div>';
   }
 
+  if (scanned && searching) html += searchNote(visible.length);
+
   if (!scanned) {
     html += '<div class="empty-state"><p class="display">The wire is quiet.</p><p>Run a scan to pull the latest news and firm posts.</p></div>';
-  } else if (!visible.length && !scanning) {
+  } else if (!visible.length && !scanning && !searching) {
     html += '<div class="notice">' + (settings.topicsOnly ? "NOTHING MATCHES YOUR TOPICS IN THIS WINDOW." : "NO ITEMS IN THIS WINDOW.") + '</div>';
   }
 
   visible.forEach(function (item) {
-    var tags = (item.watch || []).map(function (t) { return '<span class="tag firm">' + esc(t) + '</span>'; }).join("")
-      + (item.matched || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join("");
+    var tags = (item.watch || []).map(function (t) { return '<span class="tag firm">' + esc(tagLabel(t)) + '</span>'; }).join("")
+      + (item.matched || []).map(function (t) { return '<span class="tag">' + esc(tagLabel(t)) + '</span>'; }).join("");
     html += '<a class="item ' + esc(item.channel) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
       + '<div class="src">' + CHANNELS[item.channel] + ' \u00B7 ' + esc(item.source || "\u2014")
       + (item.date ? ' \u00B7 ' + esc(item.date) : '')
       + (isNew(item) ? '<span class="new">NEW</span>' : '') + '</div>'
-      + '<div class="title">' + esc(item.title) + '</div>'
-      + (item.summary ? '<p class="sum">' + esc(item.summary) + '</p>' : '')
+      + '<div class="title">' + highlight(item.title, words) + '</div>'
+      + (item.summary ? '<p class="sum">' + highlight(item.summary, words) + '</p>' : '')
       + (tags ? '<div class="tags">' + tags + '</div>' : '')
       + '</a>';
   });
