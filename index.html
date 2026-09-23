@@ -261,14 +261,15 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 10;
+var SETTINGS_VERSION = 11;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: [
     "AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort",
     // Lawsuit Intelligencer's beats
     "AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit", "video game addiction lawsuit",
-    "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising", "state attorney general lawsuit"
+    "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising", "state attorney general lawsuit",
+    "GLP-1 lawsuit", "wildfire lawsuit"
   ],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
   // Link wrappers carry a headline and no article, so a firm name search can surface
@@ -322,7 +323,8 @@ var ADDED = {
                 "video game addiction lawsuit", "AI data center lawsuit", "qui tam", "law firm MSO",
                 "mass tort advertising"] },
   9: { blockedTerms: ["police + AI", "cop + AI"] },
-  10: { topics: ["state attorney general lawsuit"] }
+  10: { topics: ["state attorney general lawsuit"] },
+  11: { topics: ["GLP-1 lawsuit", "wildfire lawsuit"] }
 };
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
@@ -661,6 +663,16 @@ var TOPIC_RULES = {
   "depo-provera": { names: ["medroxyprogesterone"] },
   "hair relaxer": { names: ["relaxer", "hair straightener", "hair product"] },
   "roundup": { names: ["glyphosate", "weedkiller", "weed killer"] },
+  "glp-1": {
+    loose: ["glp-1", "glp1", "ozempic", "wegovy", "mounjaro", "zepbound", "semaglutide", "tirzepatide",
+            "weight loss drug", "weight-loss drug"],
+    context: /\b(lawsuits?|sued|sues|suing|mdl|claims?|plaintiffs?|litigation|vision|blindness|naion|gastroparesis|stomach paralysis|pancreatitis|injur\w*|side effects?)\b/i
+  },
+  "wildfire": {
+    names: ["eaton fire", "palisades fire", "lahaina fire", "maui fire"],
+    loose: ["wildfire"],
+    context: /\b(lawsuits?|sued|sues|suing|trial|settle\w*|liabilit\w*|verdicts?|claims?|inverse condemnation|mdl|utility|utilities|edison|pg&e|pacificorp|hawaiian electric|xcel)\b/i
+  },
   // Mass tort news usually says MDL or bellwether, not "mass tort".
   "mass tort": { names: ["multidistrict litigation", "mdl", "bellwether", "jpml"] },
 
@@ -713,15 +725,20 @@ var TOPIC_RULES = {
     loose: ["mso", "private equity", "outside investment"],
     context: /\b(law firms?|lawyers?|attorneys?|legal|litigation)\b/i
   },
-  // State AG consumer-protection enforcement: suits, investigations, subpoenas, settlements. A story
-  // needs a named state or a multistate coalition as well, and no federal side, so U.S. Attorney
-  // General and DOJ news stays out.
+  // State AG consumer-protection enforcement against companies: suits, investigations, subpoenas,
+  // settlements. A story needs a named state or multistate coalition, an enforcement word, and a
+  // consumer-harm word or a company Intelligencer tracks. Stories naming the federal side, the Trump
+  // administration or a governor are out, which drops suits against the administration and state politics.
   "state attorney general": {
     loose: ["state attorney general", "state attorneys general", "attorney general", "attorneys general", "ag", "ags"],
     context: new RegExp(
-      "^(?!.*\\b(u\\.s\\. attorney general|us attorney general|justice department|department of justice|doj|federal)\\b)" +
-      "(?=.*\\b(sues?|sued|suing|lawsuits?|complaint|subpoena\\w*|investigat\\w*|settle\\w*|consumer|deceptive|" +
+      "^(?!.*\\b(u\\.s\\. attorney general|us attorney general|justice department|department of justice|doj|federal|" +
+      "trump|administration|governor|white house)\\b)" +
+      "(?=.*\\b(sues?|sued|suing|lawsuits?|complaint|subpoena\\w*|investigat\\w*|settle\\w*|" +
       "civil investigative demand|cease[- ]and[- ]desist|enforcement)\\b)" +
+      "(?=.*\\b(consumers?|deceptive|unfair|fraud\\w*|mislead\\w*|misled|safety|harm\\w*|children|kids|teens?|minors|" +
+      "health|cancer|pfas|chemicals?|pollut\\w*|contaminat\\w*|opioids?|drugs?|products?|addict\\w*|privacy|" +
+      "chatbots?|ai|openai|character\\.ai|meta|tiktok|snap|roblox|google|xai)\\b)" +
       "(?=.*\\b(state|states|multistate|bipartisan|coalition|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|d\\.c\\.|district of columbia|puerto rico)\\b)",
       "i")
   },
@@ -1245,6 +1262,29 @@ function isBlocked(item) {
   });
 }
 
+// A firm name search matches pages that mention the firm anywhere, sidebars included, so a
+// story counts as firm news only when its own headline or summary names the firm: the full name,
+// or a surname from it ("Rice" for Motley Rice). A name that repeats a word (Morgan & Morgan)
+// needs the full name, since the surname alone is too common.
+var FIRM_NAME_SKIP = { law: 1, firm: 1, group: 1, llp: 1, pllc: 1, llc: 1, and: 1, the: 1, attorneys: 1, lawyers: 1 };
+var firmRxCache = {};
+function firmPattern(name) {
+  if (firmRxCache[name]) return firmRxCache[name];
+  var words = name.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+  var count = {};
+  words.forEach(function (w) { count[w] = (count[w] || 0) + 1; });
+  var surnames = words.filter(function (w) { return w.length >= 4 && !FIRM_NAME_SKIP[w] && count[w] === 1; });
+  var full = rx(name).replace(/\s*&\s*/g, "\\s*(&|and)\\s*").replace(/\s+/g, "\\s+");
+  var parts = [full].concat(surnames.map(rx));
+  firmRxCache[name] = new RegExp("\\b(" + parts.join("|") + ")\\b", "i");
+  return firmRxCache[name];
+}
+
+function namesWatchedFirm(item) {
+  var text = itemText(item);
+  return (item.watch || []).some(function (name) { return firmPattern(name).test(text); });
+}
+
 function renderFeed() {
   // A story fetched by two channels shows once, in the channel chan() gives it.
   var seenUrl = {};
@@ -1256,10 +1296,12 @@ function renderFeed() {
   var shown = unique.filter(function (i) { return !isBlocked(i); });
   var hiddenCount = unique.length - shown.length;
 
-  // MY TOPICS ONLY keeps a story when it names one of your tracked topics. An AI search line
-  // or a topic search that merely returned the story doesn't count.
+  // MY TOPICS ONLY keeps a story when it names one of your tracked topics, or when a firm name
+  // search found it and the story names that firm: firm news (a founder's obituary, a sponsorship
+  // deal) rarely names a tort. An AI search line or a topic search that merely returned the story
+  // doesn't count.
   var pool = settings.topicsOnly
-    ? shown.filter(function (i) { return topicsOf(i).length; })
+    ? shown.filter(function (i) { return topicsOf(i).length || namesWatchedFirm(i); })
     : shown;
 
   // The topic bar lists every tag in the current channel, so tapping one never empties the bar.
