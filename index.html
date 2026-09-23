@@ -68,7 +68,8 @@
   }
   textarea { resize: vertical; }
   .add-btn { background: none; border: 1px solid var(--ink); padding: 9px 14px; flex-shrink: 0; }
-  .config-foot { display: flex; justify-content: flex-end; margin-top: 16px; }
+  .config-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 16px; }
+  .config-foot .hint { margin: 0 auto 0 0; }
 
   .health { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
   .health td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--rule); vertical-align: top; word-break: break-word; }
@@ -212,7 +213,7 @@
 
   <div class="label">FIRM FEEDS (ONE PER LINE)</div>
   <textarea id="firmFeedsInput" rows="5"></textarea>
-  <p class="hint">A blog page URL works if the page lists its feed. Settings save on this device.</p>
+  <p class="hint">A blog page URL works if the page lists its feed. Settings save to the site, so every window and device shares them.</p>
 
   <div class="label">AI SEARCHES (ONE PER LINE)</div>
   <textarea id="aiSearchInput" rows="8"></textarea>
@@ -226,6 +227,7 @@
   <div id="healthBox"><p class="hint">Run a scan to see which sources respond.</p></div>
 
   <div class="config-foot">
+    <span class="hint" id="syncStatus"></span>
     <button class="ghost" id="resetBtn">RESET TO DEFAULTS</button>
   </div>
 </div>
@@ -248,7 +250,7 @@
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; NO API KEYS &middot; SETTINGS SAVED ON THIS DEVICE
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
@@ -316,22 +318,30 @@ function save(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
 }
 
-var storedSettings = load(STORE_KEY, {});
-var settings = Object.assign({}, DEFAULTS, storedSettings);
+var settings;
 
-// A saved setting outranks its default permanently, so a device that has run one scan keeps
-// the AI searches and blocked sources it saved that day and never sees corrected ones.
-// A version bump reapplies the sources this app maintains, and leaves your own lists alone.
-if ((storedSettings.version || 0) < SETTINGS_VERSION) {
-  settings.aiSearches = DEFAULTS.aiSearches.slice();
-  settings.aiFeeds = DEFAULTS.aiFeeds.slice();
-  settings.blockedSources = (settings.blockedSources || []).slice();
-  DEFAULTS.blockedSources.forEach(function (b) {
-    if (settings.blockedSources.indexOf(b) === -1) settings.blockedSources.push(b);
-  });
-  settings.version = SETTINGS_VERSION;
-  save(STORE_KEY, settings);
+// Copies, so adding a topic never edits DEFAULTS itself.
+function applySettings(stored) {
+  stored = stored || {};
+  settings = JSON.parse(JSON.stringify(Object.assign({}, DEFAULTS, stored)));
+  delete settings.savedAt;
+  // A saved setting outranks its default permanently, so a device that has run one scan keeps
+  // the AI searches and blocked sources it saved that day and never sees corrected ones.
+  // A version bump reapplies the sources this app maintains, and leaves your own lists alone.
+  if ((stored.version || 0) < SETTINGS_VERSION) {
+    settings.aiSearches = DEFAULTS.aiSearches.slice();
+    settings.aiFeeds = DEFAULTS.aiFeeds.slice();
+    DEFAULTS.blockedSources.forEach(function (b) {
+      if (settings.blockedSources.indexOf(b) === -1) settings.blockedSources.push(b);
+    });
+    settings.version = SETTINGS_VERSION;
+    return true;
+  }
+  return false;
 }
+
+var storedSettings = load(STORE_KEY, null);
+if (applySettings(storedSettings)) save(STORE_KEY, settings);
 var seenBefore = load(SEEN_KEY, null);   // null on first visit: no NEW badges
 var items = [];
 var errors = {};
@@ -343,7 +353,48 @@ var query = "";          // search box text, filters as you type
 var activeTopic = "";    // topic chip tapped in the topic bar
 var adhoc = {};          // Google News lookups run from the search box, keyed by lowercased query
 
-function persist() { save(STORE_KEY, settings); }
+// ── Settings sync ──
+// Settings live on the site as well as in this browser. A private window starts with no saved
+// browser data, so without the site copy it would load the stock defaults instead of your setup.
+var SETTINGS_URL = "/.netlify/functions/settings";
+var lastSynced = "";   // settings as the site last had them, to skip saves that change nothing
+var syncTimer = null;
+
+function setSync(text, bad) {
+  var el = document.getElementById("syncStatus");
+  el.textContent = text;
+  el.style.color = bad ? "var(--bad)" : "";
+}
+
+function pushSettings() {
+  var body = JSON.stringify(settings);
+  if (body === lastSynced) return;
+  fetchT(SETTINGS_URL, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: body
+  }, 8000).then(function (res) {
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    lastSynced = body;
+    setSync("Saved to the site. Every window, private ones included, loads this setup.");
+  }).catch(function () {
+    setSync("Couldn't reach the site, so this change is saved in this window only.", true);
+  });
+}
+
+// undefined: the site couldn't be reached. null: nothing saved there yet.
+function pullSettings() {
+  return fetchT(SETTINGS_URL, { cache: "no-store" }, 5000)
+    .then(function (res) { return res.ok ? res.json() : undefined; })
+    .then(function (data) { return data ? data.settings : undefined; })
+    .catch(function () { return undefined; });
+}
+
+function persist() {
+  save(STORE_KEY, settings);
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(pushSettings, 600);
+}
 
 // ── Settings UI ──
 document.getElementById("today").textContent = new Date().toISOString().slice(0, 10);
@@ -448,8 +499,8 @@ document.getElementById("configBtn").onclick = function () {
 
 document.getElementById("resetBtn").onclick = function () {
   if (!confirm("Reset topics and feeds to the defaults?")) return;
-  settings = JSON.parse(JSON.stringify(DEFAULTS));
-  persist(); fillInputs();
+  applySettings({ version: SETTINGS_VERSION });
+  persist(); fillInputs(); renderFeed();
 };
 
 // ── Filters ──
@@ -1066,9 +1117,27 @@ function renderFeed() {
 }
 
 // ── Start ──
+// Show this window's saved setup at once, then take the site's copy before the first scan.
 fillInputs();
 renderFeed();
-window.addEventListener("load", runScan);
+setSync("Checking the site for saved settings\u2026");
+pullSettings().then(function (remote) {
+  if (remote) {
+    var migrated = applySettings(remote);
+    lastSynced = migrated ? "" : JSON.stringify(settings);
+    save(STORE_KEY, settings);
+    if (migrated) pushSettings();
+    else setSync("Loaded from the site. Every window, private ones included, loads this setup.");
+  } else if (remote === null) {
+    // Nothing on the site yet. A window that has its own saved setup becomes the shared copy.
+    if (storedSettings) pushSettings();
+    else setSync("Nothing saved on the site yet. The first change you make saves there.");
+  } else {
+    setSync("Couldn't reach the site, so this window is using the settings saved in it.", true);
+  }
+  fillInputs();
+  runScan();
+});
 </script>
 </body>
 </html>

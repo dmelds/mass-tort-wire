@@ -1,0 +1,7 @@
+{
+  "name": "mass-tort-wire",
+  "private": true,
+  "dependencies": {
+    "@netlify/blobs": "10.7.13"
+  }
+}
