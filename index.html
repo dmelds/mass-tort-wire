@@ -50,7 +50,6 @@
   select.ghost { appearance: none; -webkit-appearance: none; border-radius: 0; }
   .channel-status { margin-left: auto; display: flex; gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
   .channel-status .news { color: var(--news); }
-  .channel-status .firms { color: var(--firms); }
   .channel-status .ai { color: var(--ai); }
   .channel-status .intel { color: var(--intel); }
 
@@ -97,7 +96,6 @@
   }
   .filters button.active { color: var(--paper); border-color: transparent; background: var(--ink); }
   .filters button.active[data-f="news"] { background: var(--news); }
-  .filters button.active[data-f="firms"] { background: var(--firms); }
   .filters button.active[data-f="ai"] { background: var(--ai); }
   .filters button.active[data-f="intel"] { background: var(--intel); }
 
@@ -147,12 +145,10 @@
   .item { display: block; padding: 12px 0 12px 12px; border-bottom: 1px solid var(--rule); border-left: 3px solid var(--rule); text-decoration: none; color: var(--ink); }
   .item:active { background: var(--panel); }
   .item.news { border-left-color: var(--news); }
-  .item.firms { border-left-color: var(--firms); }
   .item.ai { border-left-color: var(--ai); }
   .item.intel { border-left-color: var(--intel); }
   .item .src { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; margin-bottom: 4px; }
   .item.news .src { color: var(--news); }
-  .item.firms .src { color: var(--firms); }
   .item.ai .src { color: var(--ai); }
   .item.intel .src { color: var(--intel); }
   .item .new { background: var(--amber); color: var(--paper); padding: 1px 5px; margin-left: 6px; letter-spacing: 0.1em; }
@@ -183,7 +179,6 @@
   <button id="topicsOnlyBtn" class="ghost" aria-pressed="false">MY TOPICS ONLY</button>
   <div class="channel-status">
     <span class="news">NEWS <span id="st-news"></span></span>
-    <span class="firms">FIRMS <span id="st-firms"></span></span>
     <span class="intel">INTEL <span id="st-intel"></span></span>
     <span class="ai">AI <span id="st-ai"></span></span>
   </div>
@@ -219,7 +214,7 @@
 
   <div class="label">FIRMS TO WATCH (ONE PER LINE)</div>
   <textarea id="firmWatchInput" rows="6"></textarea>
-  <p class="hint">Each firm runs a Google News search for its exact name: verdicts, filings, appointments, press.</p>
+  <p class="hint">Each firm runs a Google News search for its exact name on the News Wire: verdicts, filings, appointments, press.</p>
 
   <div class="label">FIRM FEEDS (ONE PER LINE)</div>
   <textarea id="firmFeedsInput" rows="5"></textarea>
@@ -246,7 +241,6 @@
   <div class="filters">
     <button data-f="all" class="active">ALL (<span id="ct-all">0</span>)</button>
     <button data-f="news">NEWS WIRE (<span id="ct-news">0</span>)</button>
-    <button data-f="firms">FIRM WIRE (<span id="ct-firms">0</span>)</button>
     <button data-f="intel">INTELLIGENCER (<span id="ct-intel">0</span>)</button>
     <button data-f="ai">AI WIRE (<span id="ct-ai">0</span>)</button>
   </div>
@@ -261,7 +255,7 @@
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; INTELLIGENCER: INTELLIGENCER TOPIC SEARCHES &middot; ALL: EVERY TAB TOGETHER &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS, FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; INTELLIGENCER: INTELLIGENCER TOPIC SEARCHES &middot; ALL: EVERY TAB TOGETHER &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
@@ -333,8 +327,8 @@ var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
 var SEEN_KEY = "mtw:seen:v2";
 var BATCH = 12;               // feeds function limit per call
-var CHANNELS = { news: "NEWS WIRE", firms: "FIRM WIRE", intel: "INTELLIGENCER", ai: "AI WIRE" };
-var CHANNEL_KEYS = ["news", "firms", "intel", "ai"];
+var CHANNELS = { news: "NEWS WIRE", intel: "INTELLIGENCER", ai: "AI WIRE" };
+var CHANNEL_KEYS = ["news", "intel", "ai"];
 var OUTLET_NAMES = { "reuters.com": "Reuters", "law360.com": "Law360", "yahoo.com": "Yahoo News" };
 
 // ── Storage (guarded: private browsing can refuse it) ──
@@ -381,7 +375,7 @@ if (applySettings(storedSettings)) save(STORE_KEY, settings);
 var seenBefore = load(SEEN_KEY, null);   // null on first visit: no NEW badges
 var items = [];
 var errors = {};
-var health = { news: [], firms: [], intel: [], ai: [] };
+var health = { news: [], intel: [], ai: [] };
 var filter = "all";
 var scanned = false;
 var scanning = false;
@@ -845,8 +839,8 @@ function highlight(text, words) {
 }
 
 // Your tracked topics, in your order, each with how many stories in this tab cover it.
-// ALL lists every topic. The AI Wire and INTELLIGENCER tabs list their own, and the News and
-// Firm Wires list the rest.
+// ALL lists every topic. The AI Wire and INTELLIGENCER tabs list their own, and the News Wire
+// lists the rest.
 function renderTopicBar(list) {
   var bar = document.getElementById("topicBar");
   var scrollLeft = bar.scrollLeft;
@@ -1018,19 +1012,18 @@ function topicSearches(tab) {
     });
 }
 
+// The News Wire also carries the firm watch: firm name searches and firm blog feeds. Merging them
+// in one channel lets a firm's post and the press story about it collapse into one item.
 function fetchNews() {
   var searches = topicSearches("");
   return Promise.allSettled([
     runBatches(searches, 10),
     runBatches(settings.newsFeeds, 8),
-    runBatches(outletSearches(), 10)
+    runBatches(outletSearches(), 10),
+    runBatches(settings.firmFeeds, 8),
+    runBatches(firmSearches(), 6)
   ])
     .then(function (results) { return mergeChannel(results, "news"); });
-}
-
-function fetchFirms() {
-  return Promise.allSettled([runBatches(settings.firmFeeds, 8), runBatches(firmSearches(), 6)])
-    .then(function (results) { return mergeChannel(results, "firms"); });
 }
 
 // Each AI line is the search, run verbatim. The line also tags every item it returns,
@@ -1138,7 +1131,7 @@ function runScan() {
   items = [];
   errors = {};
   adhoc = {};
-  health = { news: [], firms: [], intel: [], ai: [] };
+  health = { news: [], intel: [], ai: [] };
   scanned = true;
   renderFeed();
   renderHealth();
@@ -1158,7 +1151,7 @@ function runScan() {
   }
 
   Promise.allSettled([
-    run("news", fetchNews), run("firms", fetchFirms), run("intel", fetchIntel), run("ai", fetchAI)
+    run("news", fetchNews), run("intel", fetchIntel), run("ai", fetchAI)
   ]).then(function () {
     // Remember everything shown so the next visit can mark what's new.
     var keys = items.map(function (i) { return i.url; });
