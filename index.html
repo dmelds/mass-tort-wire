@@ -190,7 +190,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search for the News Wire, up to 12. Topics also tag matching Firm Wire posts.</p>
+  <p class="hint">Each topic runs as a Google News search for the News Wire, up to 20. Topics also tag matching Firm Wire posts.</p>
 
   <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
   <textarea id="outletsInput" rows="3"></textarea>
@@ -256,10 +256,15 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 7;
+var SETTINGS_VERSION = 8;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
-  topics: ["AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort"],
+  topics: [
+    "AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort",
+    // Lawsuit Intelligencer's beats
+    "AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit", "video game addiction lawsuit",
+    "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising"
+  ],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
   // Link wrappers carry a headline and no article, so a firm name search can surface
   // a bare tweet as a story. They are blocked by the host the item resolves to.
@@ -302,6 +307,13 @@ var DEFAULTS = {
   windowDays: 7,
   topicsOnly: false
 };
+// Topics added to the defaults in a given version. A device that saved its topics before that
+// version gets them once, and a topic you later remove stays removed.
+var ADDED_TOPICS = {
+  8: ["AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit", "video game addiction lawsuit",
+      "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising"]
+};
+var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
 var SEEN_KEY = "mtw:seen:v2";
 var BATCH = 12;               // feeds function limit per call
@@ -334,6 +346,12 @@ function applySettings(stored) {
     DEFAULTS.blockedSources.forEach(function (b) {
       if (settings.blockedSources.indexOf(b) === -1) settings.blockedSources.push(b);
     });
+    for (var v = (stored.version || 0) + 1; v <= SETTINGS_VERSION; v++) {
+      (ADDED_TOPICS[v] || []).forEach(function (t) {
+        var has = settings.topics.some(function (x) { return x.toLowerCase() === t.toLowerCase(); });
+        if (!has) settings.topics.push(t);
+      });
+    }
     settings.version = SETTINGS_VERSION;
     return true;
   }
@@ -618,12 +636,50 @@ function tagLabel(t) {
 // A topic search tags everything it returns, so "hair relaxer lawsuit" arrived on a story about
 // OpenAI and "Depo-Provera lawsuit" on an Ozempic story. A story belongs to a topic only when its
 // own headline or summary names the topic, or a name the press uses for it.
-var TOPIC_ALIASES = {
-  "pfas": ["forever chemical", "pfoa", "pfos"],
-  "afff": ["firefighting foam", "firefighter foam", "fire-fighting foam", "aqueous film"],
-  "depo-provera": ["medroxyprogesterone"],
-  "hair relaxer": ["relaxer", "hair straightener", "hair product"],
-  "roundup": ["glyphosate", "weedkiller", "weed killer"]
+//   names: other names that prove the topic on their own
+//   loose: words that also mean other things, so they count only when `context` is in the story too
+var TOPIC_RULES = {
+  "pfas": { names: ["forever chemical", "pfoa", "pfos"] },
+  "afff": { names: ["firefighting foam", "firefighter foam", "fire-fighting foam", "aqueous film"] },
+  "depo-provera": { names: ["medroxyprogesterone"] },
+  "hair relaxer": { names: ["relaxer", "hair straightener", "hair product"] },
+  "roundup": { names: ["glyphosate", "weedkiller", "weed killer"] },
+
+  // Lawsuit Intelligencer's beats
+  "ai chatbot": {
+    names: ["character.ai", "ai companion"],
+    loose: ["ai chatbot", "chatbot", "chatgpt", "openai", "section 230"],
+    context: /\b(deaths?|died|suicide|wrongful|teens?|overdose|minors?|harm|injur\w*|lawsuits?|sued|sues|suing)\b/i
+  },
+  "ai in court": {
+    names: ["hallucinated citation", "fake citation", "fabricated citation", "ai-generated evidence"],
+    loose: ["ai", "artificial intelligence", "generative ai", "chatgpt", "ai slop"],
+    // "Judge" alone is also a verb ("how to judge an AI answer"), so it counts only as a title.
+    context: /\b(courts?|courtrooms?|judges|(federal|district|appeals|state|county|trial|the|a) judge|judicial|judiciary|lawyers?|attorneys?|sanction\w*|filings?|briefs?|pleadings?|jurors?|jury|depositions?|witness(es)?|attorneys? general)\b/i
+  },
+  "nec baby formula": {
+    names: ["necrotizing enterocolitis"],
+    loose: ["nec"],
+    context: /\b(formula|infants?|bab(y|ies)|premature|preterm|preemies?|abbott|mead johnson|similac|enfamil)\b/i
+  },
+  "byheart": { names: ["infant botulism"] },
+  "video game addiction": { names: ["gaming addiction", "game addiction", "gaming disorder"] },
+  "ai data center": {
+    names: ["colossus"],
+    loose: ["data center", "data centre"],
+    context: /\b(lawsuits?|sued|sues|suing|class action|pollution|permits?|courts?|residents|turbines?|emissions)\b/i
+  },
+  "qui tam": { names: ["false claims act", "whistleblower lawsuit"] },
+  "law firm mso": {
+    names: ["management services organization", "alternative business structure", "fee sharing",
+            "nonlawyer ownership", "non-lawyer ownership", "private equity law firm", "law firm private equity"],
+    loose: ["mso"],
+    context: /\b(law firms?|lawyers?|attorneys?|legal|plaintiffs?)\b/i
+  },
+  "mass tort advertising": {
+    names: ["legal advertising", "lawyer advertising", "attorney advertising", "lawsuit advertising",
+            "claimant acquisition", "legal marketing"]
+  }
 };
 
 // "Roundup" also names a news digest: "UK Litigation Roundup: Here's What You Missed",
@@ -632,29 +688,36 @@ var TOPIC_ALIASES = {
 var DIGEST_BEFORE = /\b(litigation|legal|law|news|weekly|daily|week|morning|evening|friday|monday|state|regional)\s+roundups?\b/i;
 var DIGEST_AFTER = /\broundups?\s*:/i;
 
+function namesRx(names) {
+  if (!names.length) return null;
+  return new RegExp("\\b(" + names.map(function (n) {
+    return rx(n).replace(/[\s-]+/g, "[\\s-]+");
+  }).join("|") + ")(?:e?s)?\\b", "i");
+}
+
 var topicRx = {};
 function topicPattern(topic) {
   if (topicRx[topic]) return topicRx[topic];
   var core = coreTerm(topic).toLowerCase();
-  var names = [core].concat(TOPIC_ALIASES[core] || []);
-  var re = new RegExp("\\b(" + names.map(function (n) {
-    return rx(n).replace(/[\s-]+/g, "[\\s-]+");
-  }).join("|") + ")(?:e?s)?\\b", "gi");
-  topicRx[topic] = { core: core, re: re };
+  var rule = TOPIC_RULES[core] || {};
+  var ambiguous = !!AMBIGUOUS_TERMS[core];
+  topicRx[topic] = {
+    core: core,
+    ambiguous: ambiguous,
+    strict: namesRx((ambiguous || (rule.loose || []).indexOf(core) !== -1 ? [] : [core]).concat(rule.names || [])),
+    loose: namesRx((ambiguous ? [core] : []).concat(rule.loose || [])),
+    context: rule.context || null
+  };
   return topicRx[topic];
 }
 
 function topicProven(topic, text) {
   var p = topicPattern(topic);
-  p.re.lastIndex = 0;
-  if (!AMBIGUOUS_TERMS[p.core]) return p.re.test(text);
-  // Ambiguous term: an alias proves it outright; the bare word has to be out of digest form.
-  var m, bareOk = false;
-  while ((m = p.re.exec(text))) {
-    if (m[1].toLowerCase() !== p.core) return true;
-    bareOk = true;
-  }
-  return bareOk && !DIGEST_BEFORE.test(text) && !DIGEST_AFTER.test(text);
+  if (p.strict && p.strict.test(text)) return true;
+  if (!p.loose || !p.loose.test(text)) return false;
+  // Bare "Roundup" has to be out of digest form; other loose words need their context.
+  if (p.ambiguous) return !DIGEST_BEFORE.test(text) && !DIGEST_AFTER.test(text);
+  return p.context ? p.context.test(text) : true;
 }
 
 function itemText(item) {
@@ -865,7 +928,7 @@ function firmSearches() {
 }
 
 function fetchNews() {
-  var searches = settings.topics.slice(0, 12).map(function (t) {
+  var searches = settings.topics.slice(0, MAX_TOPIC_SEARCHES).map(function (t) {
     return { url: googleNewsUrl(t), topic: t };
   });
   return Promise.allSettled([
