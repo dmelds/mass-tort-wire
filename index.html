@@ -25,6 +25,7 @@
     --news: #2E5E7E;
     --firms: #3E6B4F;
     --ai: #6B4A7A;
+    --intel: #7C5B1E;
     --bad: #A2412A;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -51,6 +52,7 @@
   .channel-status .news { color: var(--news); }
   .channel-status .firms { color: var(--firms); }
   .channel-status .ai { color: var(--ai); }
+  .channel-status .intel { color: var(--intel); }
 
   #config { display: none; border-bottom: 1px solid var(--rule); background: var(--panel); padding: 16px 20px; }
   #config.open { display: block; }
@@ -97,6 +99,7 @@
   .filters button.active[data-f="news"] { background: var(--news); }
   .filters button.active[data-f="firms"] { background: var(--firms); }
   .filters button.active[data-f="ai"] { background: var(--ai); }
+  .filters button.active[data-f="intel"] { background: var(--intel); }
 
   .search { padding: 0 16px 10px; display: flex; gap: 8px; }
   .search input[type=search] {
@@ -146,10 +149,12 @@
   .item.news { border-left-color: var(--news); }
   .item.firms { border-left-color: var(--firms); }
   .item.ai { border-left-color: var(--ai); }
+  .item.intel { border-left-color: var(--intel); }
   .item .src { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; margin-bottom: 4px; }
   .item.news .src { color: var(--news); }
   .item.firms .src { color: var(--firms); }
   .item.ai .src { color: var(--ai); }
+  .item.intel .src { color: var(--intel); }
   .item .new { background: var(--amber); color: var(--paper); padding: 1px 5px; margin-left: 6px; letter-spacing: 0.1em; }
   .item .title { font-family: 'Spectral', Georgia, serif; font-size: 16px; font-weight: 600; line-height: 1.3; }
   .item .sum { color: var(--dim); font-size: 13px; line-height: 1.4; margin-top: 4px; }
@@ -179,6 +184,7 @@
   <div class="channel-status">
     <span class="news">NEWS <span id="st-news"></span></span>
     <span class="firms">FIRMS <span id="st-firms"></span></span>
+    <span class="intel">INTEL <span id="st-intel"></span></span>
     <span class="ai">AI <span id="st-ai"></span></span>
   </div>
 </div>
@@ -190,7 +196,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search, up to 20. AI topics search for the AI Wire and the rest for the News Wire. A story that covers an AI topic shows on the AI Wire. Everything else shows under ALL.</p>
+  <p class="hint">Each topic runs as a Google News search, up to 20. AI topics search for the AI Wire, Intelligencer topics for the INTELLIGENCER tab, and the rest for the News Wire. A story that covers an AI or Intelligencer topic shows in that tab. Everything else shows under ALL.</p>
 
   <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
   <textarea id="outletsInput" rows="3"></textarea>
@@ -241,6 +247,7 @@
     <button data-f="all" class="active">ALL (<span id="ct-all">0</span>)</button>
     <button data-f="news">NEWS WIRE (<span id="ct-news">0</span>)</button>
     <button data-f="firms">FIRM WIRE (<span id="ct-firms">0</span>)</button>
+    <button data-f="intel">INTELLIGENCER (<span id="ct-intel">0</span>)</button>
     <button data-f="ai">AI WIRE (<span id="ct-ai">0</span>)</button>
   </div>
   <div class="search">
@@ -254,7 +261,7 @@
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; ALL: EVERYTHING BUT THE AI WIRE &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; INTELLIGENCER: INTELLIGENCER TOPIC SEARCHES &middot; ALL: EVERYTHING BUT INTELLIGENCER AND THE AI WIRE &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
@@ -326,8 +333,8 @@ var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
 var SEEN_KEY = "mtw:seen:v2";
 var BATCH = 12;               // feeds function limit per call
-var CHANNELS = { news: "NEWS WIRE", firms: "FIRM WIRE", ai: "AI WIRE" };
-var CHANNEL_KEYS = ["news", "firms", "ai"];
+var CHANNELS = { news: "NEWS WIRE", firms: "FIRM WIRE", intel: "INTELLIGENCER", ai: "AI WIRE" };
+var CHANNEL_KEYS = ["news", "firms", "intel", "ai"];
 var OUTLET_NAMES = { "reuters.com": "Reuters", "law360.com": "Law360", "yahoo.com": "Yahoo News" };
 
 // ── Storage (guarded: private browsing can refuse it) ──
@@ -374,7 +381,7 @@ if (applySettings(storedSettings)) save(STORE_KEY, settings);
 var seenBefore = load(SEEN_KEY, null);   // null on first visit: no NEW badges
 var items = [];
 var errors = {};
-var health = { news: [], firms: [], ai: [] };
+var health = { news: [], firms: [], intel: [], ai: [] };
 var filter = "all";
 var scanned = false;
 var scanning = false;
@@ -756,24 +763,38 @@ function topicsOf(item) {
   return item._topics;
 }
 
-// ── AI Wire routing ──
-// AI topics belong to the AI Wire: their searches run there, and any story that proves an AI
-// topic shows there whichever channel fetched it. ALL carries everything else.
+// ── Tab routing ──
+// AI topics belong to the AI Wire and Lawsuit Intelligencer's other beats to the INTELLIGENCER
+// tab. A topic's searches run in its tab, and a story that proves the topic shows there whichever
+// channel fetched it. A story covering both goes to the AI Wire. ALL carries everything else.
 var AI_TOPIC_CORES = { "ai chatbot": 1, "ai in court": 1, "ai data center": 1 };
 var AI_WORDS = /\b(ai|a\.i\.|artificial intelligence|generative ai|chatgpt|chatbots?|openai|llms?)\b/i;
+var INTEL_TOPIC_CORES = {
+  "nec baby formula": 1, "byheart": 1, "video game addiction": 1, "qui tam": 1,
+  "law firm mso": 1, "mass tort advertising": 1
+};
 
 function isAiTopic(t) {
   return !!AI_TOPIC_CORES[coreTerm(t).toLowerCase()] || AI_WORDS.test(t);
 }
 
+// "ai", "intel", or "" for a topic that belongs under ALL.
+function topicTab(t) {
+  if (isAiTopic(t)) return "ai";
+  return INTEL_TOPIC_CORES[coreTerm(t).toLowerCase()] ? "intel" : "";
+}
+
 function chan(item) {
   if (item.channel === "ai") return "ai";
-  return topicsOf(item).some(isAiTopic) ? "ai" : item.channel;
+  var tabs = topicsOf(item).map(topicTab);
+  if (tabs.indexOf("ai") !== -1) return "ai";
+  if (item.channel === "intel" || tabs.indexOf("intel") !== -1) return "intel";
+  return item.channel;
 }
 
 function inTab(item, tab) {
   var c = chan(item);
-  return tab === "all" ? c !== "ai" : c === tab;
+  return tab === "all" ? (c !== "ai" && c !== "intel") : c === tab;
 }
 
 // Tags shown on a story: firms it names, topics it proves, and the AI search or one-off
@@ -812,11 +833,12 @@ function highlight(text, words) {
 }
 
 // Your tracked topics, in your order, each with how many stories in this tab cover it.
-// The AI Wire lists the AI topics; every other tab lists the rest.
+// The AI Wire and INTELLIGENCER tabs list their own topics; every other tab lists the rest.
 function renderTopicBar(list) {
   var bar = document.getElementById("topicBar");
   var scrollLeft = bar.scrollLeft;
-  var topics = settings.topics.filter(function (t) { return (filter === "ai") === isAiTopic(t); });
+  var want = filter === "ai" || filter === "intel" ? filter : "";
+  var topics = settings.topics.filter(function (t) { return topicTab(t) === want; });
   if (activeTopic && topics.indexOf(activeTopic) === -1) activeTopic = "";
   if (!topics.length) { bar.innerHTML = ""; return; }
   var counts = {};
@@ -975,15 +997,16 @@ function firmSearches() {
   });
 }
 
-function topicSearches(ai) {
-  return settings.topics.filter(function (t) { return isAiTopic(t) === ai; })
+// Topic searches for one tab: "ai", "intel", or "" for the News Wire.
+function topicSearches(tab) {
+  return settings.topics.filter(function (t) { return topicTab(t) === tab; })
     .slice(0, MAX_TOPIC_SEARCHES).map(function (t) {
       return { url: googleNewsUrl(t), topic: t };
     });
 }
 
 function fetchNews() {
-  var searches = topicSearches(false);
+  var searches = topicSearches("");
   return Promise.allSettled([
     runBatches(searches, 10),
     runBatches(settings.newsFeeds, 8),
@@ -1005,9 +1028,14 @@ function aiSearches() {
   });
 }
 
+function fetchIntel() {
+  return Promise.allSettled([runBatches(topicSearches("intel"), 10)])
+    .then(function (results) { return mergeChannel(results, "intel"); });
+}
+
 function fetchAI() {
   return Promise.allSettled([
-    runBatches(topicSearches(true), 10),
+    runBatches(topicSearches("ai"), 10),
     runBatches(aiSearches(), 6),
     runBatches(settings.aiFeeds, 8)
   ])
@@ -1097,7 +1125,7 @@ function runScan() {
   items = [];
   errors = {};
   adhoc = {};
-  health = { news: [], firms: [], ai: [] };
+  health = { news: [], firms: [], intel: [], ai: [] };
   scanned = true;
   renderFeed();
   renderHealth();
@@ -1116,7 +1144,9 @@ function runScan() {
     });
   }
 
-  Promise.allSettled([run("news", fetchNews), run("firms", fetchFirms), run("ai", fetchAI)]).then(function () {
+  Promise.allSettled([
+    run("news", fetchNews), run("firms", fetchFirms), run("intel", fetchIntel), run("ai", fetchAI)
+  ]).then(function () {
     // Remember everything shown so the next visit can mark what's new.
     var keys = items.map(function (i) { return i.url; });
     var prior = seenBefore || [];
