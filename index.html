@@ -190,7 +190,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search for the News Wire, up to 20. Topics also tag matching Firm Wire posts.</p>
+  <p class="hint">Each topic runs as a Google News search, up to 20. AI topics search for the AI Wire and the rest for the News Wire. A story that covers an AI topic shows on the AI Wire. Everything else shows under ALL.</p>
 
   <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
   <textarea id="outletsInput" rows="3"></textarea>
@@ -254,7 +254,7 @@
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; ALL: EVERYTHING BUT THE AI WIRE &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
@@ -745,10 +745,35 @@ function itemText(item) {
   return (item.title || "") + " " + (item.summary || "");
 }
 
-// Your tracked topics that this story actually covers.
+// Your tracked topics that this story actually covers. Remembered per story until the topic
+// list changes, since the feed re-renders on every keystroke in the search box.
 function topicsOf(item) {
+  var key = settings.topics.join("\n");
+  if (item._topicsKey === key) return item._topics;
   var text = itemText(item);
-  return settings.topics.filter(function (t) { return topicProven(t, text); });
+  item._topics = settings.topics.filter(function (t) { return topicProven(t, text); });
+  item._topicsKey = key;
+  return item._topics;
+}
+
+// ── AI Wire routing ──
+// AI topics belong to the AI Wire: their searches run there, and any story that proves an AI
+// topic shows there whichever channel fetched it. ALL carries everything else.
+var AI_TOPIC_CORES = { "ai chatbot": 1, "ai in court": 1, "ai data center": 1 };
+var AI_WORDS = /\b(ai|a\.i\.|artificial intelligence|generative ai|chatgpt|chatbots?|openai|llms?)\b/i;
+
+function isAiTopic(t) {
+  return !!AI_TOPIC_CORES[coreTerm(t).toLowerCase()] || AI_WORDS.test(t);
+}
+
+function chan(item) {
+  if (item.channel === "ai") return "ai";
+  return topicsOf(item).some(isAiTopic) ? "ai" : item.channel;
+}
+
+function inTab(item, tab) {
+  var c = chan(item);
+  return tab === "all" ? c !== "ai" : c === tab;
 }
 
 // Tags shown on a story: firms it names, topics it proves, and the AI search or one-off
@@ -786,18 +811,20 @@ function highlight(text, words) {
   }).join("");
 }
 
-// Your tracked topics, in your order, each with how many stories in this channel cover it.
+// Your tracked topics, in your order, each with how many stories in this tab cover it.
+// The AI Wire lists the AI topics; every other tab lists the rest.
 function renderTopicBar(list) {
   var bar = document.getElementById("topicBar");
   var scrollLeft = bar.scrollLeft;
-  if (activeTopic && settings.topics.indexOf(activeTopic) === -1) activeTopic = "";
-  if (!settings.topics.length) { bar.innerHTML = ""; return; }
+  var topics = settings.topics.filter(function (t) { return (filter === "ai") === isAiTopic(t); });
+  if (activeTopic && topics.indexOf(activeTopic) === -1) activeTopic = "";
+  if (!topics.length) { bar.innerHTML = ""; return; }
   var counts = {};
-  settings.topics.forEach(function (t) { counts[t] = 0; });
+  topics.forEach(function (t) { counts[t] = 0; });
   list.forEach(function (i) {
-    topicsOf(i).forEach(function (t) { counts[t]++; });
+    topicsOf(i).forEach(function (t) { if (t in counts) counts[t]++; });
   });
-  bar.innerHTML = '<span class="tlabel">TOPICS</span>' + settings.topics.map(function (t) {
+  bar.innerHTML = '<span class="tlabel">TOPICS</span>' + topics.map(function (t) {
     return '<button class="tchip' + (t === activeTopic ? ' on' : '') + (counts[t] ? '' : ' none') +
       '" data-topic="' + esc(t) + '" aria-pressed="' + (t === activeTopic) + '">' +
       esc(coreTerm(t)) + '<span class="n">' + counts[t] + '</span></button>';
@@ -948,10 +975,15 @@ function firmSearches() {
   });
 }
 
+function topicSearches(ai) {
+  return settings.topics.filter(function (t) { return isAiTopic(t) === ai; })
+    .slice(0, MAX_TOPIC_SEARCHES).map(function (t) {
+      return { url: googleNewsUrl(t), topic: t };
+    });
+}
+
 function fetchNews() {
-  var searches = settings.topics.slice(0, MAX_TOPIC_SEARCHES).map(function (t) {
-    return { url: googleNewsUrl(t), topic: t };
-  });
+  var searches = topicSearches(false);
   return Promise.allSettled([
     runBatches(searches, 10),
     runBatches(settings.newsFeeds, 8),
@@ -974,7 +1006,11 @@ function aiSearches() {
 }
 
 function fetchAI() {
-  return Promise.allSettled([runBatches(aiSearches(), 6), runBatches(settings.aiFeeds, 8)])
+  return Promise.allSettled([
+    runBatches(topicSearches(true), 10),
+    runBatches(aiSearches(), 6),
+    runBatches(settings.aiFeeds, 8)
+  ])
     .then(function (results) { return mergeChannel(results, "ai"); });
 }
 
@@ -1157,8 +1193,15 @@ function isBlocked(item) {
 }
 
 function renderFeed() {
-  var shown = items.filter(function (i) { return !isBlocked(i); });
-  var hiddenCount = items.length - shown.length;
+  // A story fetched by two channels shows once, in the channel chan() gives it.
+  var seenUrl = {};
+  var unique = items.filter(function (i) {
+    if (seenUrl[i.url]) return false;
+    seenUrl[i.url] = true;
+    return true;
+  });
+  var shown = unique.filter(function (i) { return !isBlocked(i); });
+  var hiddenCount = unique.length - shown.length;
 
   // MY TOPICS ONLY keeps a story when it names one of your tracked topics. An AI search line
   // or a topic search that merely returned the story doesn't count.
@@ -1167,7 +1210,7 @@ function renderFeed() {
     : shown;
 
   // The topic bar lists every tag in the current channel, so tapping one never empties the bar.
-  renderTopicBar(filter === "all" ? pool : pool.filter(function (i) { return i.channel === filter; }));
+  renderTopicBar(pool.filter(function (i) { return inTab(i, filter); }));
 
   var words = queryWords(query);
   var searching = !!(words.length || activeTopic);
@@ -1175,13 +1218,13 @@ function renderFeed() {
     return (!activeTopic || topicsOf(i).indexOf(activeTopic) !== -1) && matchesQuery(i, words);
   });
 
-  // Channel counts follow the search, so each tab shows how many of its stories match.
-  document.getElementById("ct-all").textContent = hits.length;
-  CHANNEL_KEYS.forEach(function (ch) {
-    document.getElementById("ct-" + ch).textContent = hits.filter(function (i) { return i.channel === ch; }).length;
+  // Tab counts follow the search, so each tab shows how many of its stories match.
+  // ALL counts everything outside the AI Wire.
+  ["all"].concat(CHANNEL_KEYS).forEach(function (tab) {
+    document.getElementById("ct-" + tab).textContent = hits.filter(function (i) { return inTab(i, tab); }).length;
   });
 
-  var visible = sortItems(filter === "all" ? hits : hits.filter(function (i) { return i.channel === filter; }));
+  var visible = sortItems(hits.filter(function (i) { return inTab(i, filter); }));
   var html = "";
 
   Object.keys(errors).forEach(function (ch) {
@@ -1219,8 +1262,9 @@ function renderFeed() {
     var tags = tagsOf(item).map(function (t) {
       return '<span class="tag' + (watch.indexOf(t) !== -1 ? ' firm' : '') + '">' + esc(tagLabel(t)) + '</span>';
     }).join("");
-    html += '<a class="item ' + esc(item.channel) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
-      + '<div class="src">' + CHANNELS[item.channel] + ' \u00B7 ' + esc(item.source || "\u2014")
+    var c = chan(item);
+    html += '<a class="item ' + esc(c) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
+      + '<div class="src">' + CHANNELS[c] + ' \u00B7 ' + esc(item.source || "\u2014")
       + (item.date ? ' \u00B7 ' + esc(item.date) : '')
       + (isNew(item) ? '<span class="new">NEW</span>' : '') + '</div>'
       + '<div class="title">' + highlight(item.title, words) + '</div>'
