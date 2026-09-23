@@ -661,6 +661,8 @@ var TOPIC_RULES = {
   "depo-provera": { names: ["medroxyprogesterone"] },
   "hair relaxer": { names: ["relaxer", "hair straightener", "hair product"] },
   "roundup": { names: ["glyphosate", "weedkiller", "weed killer"] },
+  // Mass tort news usually says MDL or bellwether, not "mass tort".
+  "mass tort": { names: ["multidistrict litigation", "mdl", "bellwether", "jpml"] },
 
   // Lawsuit Intelligencer's beats
   "ai chatbot": {
@@ -958,8 +960,10 @@ function runBatches(entries, perFeed) {
     });
 }
 
+// Every Google News search carries the window as a date limit. Without one, Google returns its
+// most relevant set, which on 9/23/26 had nothing newer than the day before.
 function whenClause() {
-  return settings.windowDays <= 7 ? " when:7d" : "";
+  return " when:" + (settings.windowDays === 30 ? 30 : 7) + "d";
 }
 
 function gnews(q) {
