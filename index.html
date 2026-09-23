@@ -666,11 +666,17 @@ var TOPIC_RULES = {
     loose: ["ai chatbot", "chatbot", "chatgpt", "openai", "section 230"],
     context: /\b(deaths?|died|suicide|wrongful|teens?|overdose|minors?|harm|injur\w*|lawsuits?|sued|sues|suing)\b/i
   },
+  // Litigation practice only: sanctions, hallucinated citations, AI in filings, briefs, depositions
+  // and evidence, plus courts issuing AI rules. "AI" next to a bare "court" or "judge" pulled in
+  // police statements, stock stories and data-rights suits, so those words alone don't count.
   "ai in court": {
     names: ["hallucinated citation", "fake citation", "fabricated citation", "ai-generated evidence"],
-    loose: ["ai", "artificial intelligence", "generative ai", "chatgpt", "ai slop"],
-    // "Judge" alone is also a verb ("how to judge an AI answer"), so it counts only as a title.
-    context: /\b(courts?|courtrooms?|judges|(federal|district|appeals|state|county|trial|the|a) judge|judicial|judiciary|lawyers?|attorneys?|sanction\w*|filings?|briefs?|pleadings?|jurors?|jury|depositions?|witness(es)?|attorneys? general)\b/i
+    loose: ["ai", "artificial intelligence", "generative ai", "chatgpt", "llm"],
+    context: new RegExp(
+      "\\b(sanction\\w*|hallucinat\\w*|fabricated|fake (citations?|cases?|witness\\w*)|citations?|filings?|briefs?|" +
+      "pleadings?|jurors?|jury|depositions?|expert witness\\w*|deepfake evidence)\\b" +
+      "|^(?=.*\\b(judiciary|judicial)\\b)(?=.*\\b(guidance|rules?|recommendations?|polic(y|ies)|standing orders?)\\b)",
+      "i")
   },
   "nec baby formula": {
     names: ["necrotizing enterocolitis"],
