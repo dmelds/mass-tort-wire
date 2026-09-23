@@ -261,14 +261,14 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 9;
+var SETTINGS_VERSION = 10;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: [
     "AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort",
     // Lawsuit Intelligencer's beats
     "AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit", "video game addiction lawsuit",
-    "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising"
+    "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising", "state attorney general lawsuit"
   ],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
   // Link wrappers carry a headline and no article, so a firm name search can surface
@@ -321,7 +321,8 @@ var ADDED = {
   8: { topics: ["AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit",
                 "video game addiction lawsuit", "AI data center lawsuit", "qui tam", "law firm MSO",
                 "mass tort advertising"] },
-  9: { blockedTerms: ["police + AI", "cop + AI"] }
+  9: { blockedTerms: ["police + AI", "cop + AI"] },
+  10: { topics: ["state attorney general lawsuit"] }
 };
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
@@ -710,6 +711,18 @@ var TOPIC_RULES = {
     loose: ["mso", "private equity", "outside investment"],
     context: /\b(law firms?|lawyers?|attorneys?|legal|litigation)\b/i
   },
+  // State AG consumer-protection enforcement: suits, investigations, subpoenas, settlements. A story
+  // needs a named state or a multistate coalition as well, and no federal side, so U.S. Attorney
+  // General and DOJ news stays out.
+  "state attorney general": {
+    loose: ["state attorney general", "state attorneys general", "attorney general", "attorneys general", "ag", "ags"],
+    context: new RegExp(
+      "^(?!.*\\b(u\\.s\\. attorney general|us attorney general|justice department|department of justice|doj|federal)\\b)" +
+      "(?=.*\\b(sues?|sued|suing|lawsuits?|complaint|subpoena\\w*|investigat\\w*|settle\\w*|consumer|deceptive|" +
+      "civil investigative demand|cease[- ]and[- ]desist|enforcement)\\b)" +
+      "(?=.*\\b(state|states|multistate|bipartisan|coalition|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|d\\.c\\.|district of columbia|puerto rico)\\b)",
+      "i")
+  },
   "mass tort advertising": {
     names: ["legal advertising", "lawyer advertising", "attorney advertising", "lawsuit advertising",
             "claimant acquisition", "legal marketing"]
@@ -777,7 +790,7 @@ var AI_TOPIC_CORES = { "ai chatbot": 1, "ai in court": 1, "ai data center": 1 };
 var AI_WORDS = /\b(ai|a\.i\.|artificial intelligence|generative ai|chatgpt|chatbots?|openai|llms?)\b/i;
 var INTEL_TOPIC_CORES = {
   "nec baby formula": 1, "byheart": 1, "video game addiction": 1, "qui tam": 1,
-  "law firm mso": 1, "mass tort advertising": 1
+  "law firm mso": 1, "mass tort advertising": 1, "state attorney general": 1
 };
 
 function isAiTopic(t) {
