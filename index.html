@@ -204,6 +204,10 @@
   <textarea id="blockedInput" rows="2"></textarea>
   <p class="hint">A publisher name as shown on items, or a domain. Applies to both channels.</p>
 
+  <div class="label">BLOCKED WORDS (ONE PER LINE)</div>
+  <textarea id="blockedTermsInput" rows="3"></textarea>
+  <p class="hint">A story whose headline or summary uses one of these words or phrases is hidden from every channel. Plurals and -ed/-ing forms count too, so "copyright" also hides "copyrighted". Join words with + to hide a story only when it uses all of them: "police + AI" hides police AI stories and leaves other police news.</p>
+
   <div class="label">NEWS SITE FEEDS (ONE PER LINE)</div>
   <textarea id="newsFeedsInput" rows="3"></textarea>
 
@@ -256,7 +260,7 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 8;
+var SETTINGS_VERSION = 9;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: [
@@ -280,6 +284,9 @@ var DEFAULTS = {
   // Publishers exempt from the topic check on a topic search. Reuters headlines a PFAS
   // story "forever chemicals" and never says PFAS, and the story is still the story.
   trustedSources: ["Reuters", "reuters.com", "Law360", "law360.com"],
+  // Stories to keep off the wire entirely. Copyright and AI training-data fights are off-beat.
+  blockedTerms: ["copyright", "fair use", "training data", "scraping", "user agreement", "AI data case",
+                 "police + AI", "cop + AI"],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
     "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
@@ -307,11 +314,13 @@ var DEFAULTS = {
   windowDays: 7,
   topicsOnly: false
 };
-// Topics added to the defaults in a given version. A device that saved its topics before that
-// version gets them once, and a topic you later remove stays removed.
-var ADDED_TOPICS = {
-  8: ["AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit", "video game addiction lawsuit",
-      "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising"]
+// Entries added to the defaults in a given version. Settings saved before that version get them
+// once, and an entry you later remove stays removed.
+var ADDED = {
+  8: { topics: ["AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit",
+                "video game addiction lawsuit", "AI data center lawsuit", "qui tam", "law firm MSO",
+                "mass tort advertising"] },
+  9: { blockedTerms: ["police + AI", "cop + AI"] }
 };
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
@@ -347,9 +356,11 @@ function applySettings(stored) {
       if (settings.blockedSources.indexOf(b) === -1) settings.blockedSources.push(b);
     });
     for (var v = (stored.version || 0) + 1; v <= SETTINGS_VERSION; v++) {
-      (ADDED_TOPICS[v] || []).forEach(function (t) {
-        var has = settings.topics.some(function (x) { return x.toLowerCase() === t.toLowerCase(); });
-        if (!has) settings.topics.push(t);
+      Object.keys(ADDED[v] || {}).forEach(function (field) {
+        ADDED[v][field].forEach(function (t) {
+          var has = settings[field].some(function (x) { return x.toLowerCase() === t.toLowerCase(); });
+          if (!has) settings[field].push(t);
+        });
       });
     }
     settings.version = SETTINGS_VERSION;
@@ -431,6 +442,7 @@ function readOutlets() {
 function fillInputs() {
   document.getElementById("outletsInput").value = settings.outlets.join("\n");
   document.getElementById("blockedInput").value = settings.blockedSources.join("\n");
+  document.getElementById("blockedTermsInput").value = settings.blockedTerms.join("\n");
   document.getElementById("trustedInput").value = settings.trustedSources.join("\n");
   document.getElementById("newsFeedsInput").value = settings.newsFeeds.join("\n");
   document.getElementById("firmWatchInput").value = settings.firmWatch.join("\n");
@@ -478,6 +490,9 @@ document.getElementById("newsFeedsInput").addEventListener("change", function ()
 });
 document.getElementById("blockedInput").addEventListener("change", function () {
   settings.blockedSources = linesOf("blockedInput"); persist();
+});
+document.getElementById("blockedTermsInput").addEventListener("change", function () {
+  settings.blockedTerms = linesOf("blockedTermsInput"); persist(); renderFeed();
 });
 document.getElementById("trustedInput").addEventListener("change", function () {
   settings.trustedSources = linesOf("trustedInput"); persist();
@@ -1025,6 +1040,7 @@ function runScan() {
   scanning = true;
   settings.outlets = readOutlets();
   settings.blockedSources = linesOf("blockedInput");
+  settings.blockedTerms = linesOf("blockedTermsInput");
   settings.trustedSources = linesOf("trustedInput");
   settings.newsFeeds = linesOf("newsFeedsInput");
   settings.firmWatch = linesOf("firmWatchInput");
@@ -1111,12 +1127,38 @@ function renderHealth() {
     : '<p class="hint">' + (scanning ? "Scanning\u2026" : "Run a scan to see which sources respond.") + '</p>';
 }
 
+// A story that uses a blocked word in its headline or summary is hidden everywhere.
+// "police + AI" blocks a story only when it uses both words, so other police stories still show.
+var blockedCache = { key: null, rules: [] };
+function wordRx(w) {
+  return new RegExp("\\b" + rx(w).replace(/[\s-]+/g, "[\\s-]+") + "(?:s|es|ed|ing)?\\b", "i");
+}
+function blockedRules() {
+  var key = settings.blockedTerms.join("\n");
+  if (blockedCache.key === key) return blockedCache.rules;
+  var rules = settings.blockedTerms.map(function (t) {
+    return t.split("+").map(function (w) { return w.trim(); }).filter(Boolean).map(wordRx);
+  }).filter(function (r) { return r.length; });
+  blockedCache = { key: key, rules: rules };
+  return rules;
+}
+
+function isBlocked(item) {
+  var text = itemText(item);
+  return blockedRules().some(function (all) {
+    return all.every(function (re) { return re.test(text); });
+  });
+}
+
 function renderFeed() {
+  var shown = items.filter(function (i) { return !isBlocked(i); });
+  var hiddenCount = items.length - shown.length;
+
   // MY TOPICS ONLY keeps a story when it names one of your tracked topics. An AI search line
   // or a topic search that merely returned the story doesn't count.
   var pool = settings.topicsOnly
-    ? items.filter(function (i) { return topicsOf(i).length; })
-    : items;
+    ? shown.filter(function (i) { return topicsOf(i).length; })
+    : shown;
 
   // The topic bar lists every tag in the current channel, so tapping one never empties the bar.
   renderTopicBar(filter === "all" ? pool : pool.filter(function (i) { return i.channel === filter; }));
@@ -1147,6 +1189,11 @@ function renderFeed() {
       ' SOURCES FAILED \u00B7 ' + failed.map(function (f) { return esc(f.source) + ' (' + esc(f.error) + ')'; }).join(', ') +
       ' \u00B7 SEE EDIT SOURCES</div>';
   });
+
+  if (scanned && hiddenCount) {
+    html += '<div class="notice">' + hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') +
+      ' HIDDEN BY BLOCKED WORDS \u00B7 SEE EDIT SOURCES</div>';
+  }
 
   var newCount = visible.filter(isNew).length;
   if (scanned && newCount) {
