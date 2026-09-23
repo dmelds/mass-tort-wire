@@ -196,7 +196,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search, up to 20. AI topics search for the AI Wire, Intelligencer topics for the INTELLIGENCER tab, and the rest for the News Wire. A story that covers an AI or Intelligencer topic shows in that tab. Everything else shows under ALL.</p>
+  <p class="hint">Each topic runs as a Google News search, up to 20. AI topics search for the AI Wire, Intelligencer topics for the INTELLIGENCER tab, and the rest for the News Wire. A story that covers an AI or Intelligencer topic shows in that tab. ALL shows every tab together.</p>
 
   <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
   <textarea id="outletsInput" rows="3"></textarea>
@@ -261,7 +261,7 @@
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; INTELLIGENCER: INTELLIGENCER TOPIC SEARCHES &middot; ALL: EVERYTHING BUT INTELLIGENCER AND THE AI WIRE &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS &middot; FIRM WIRE: FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; INTELLIGENCER: INTELLIGENCER TOPIC SEARCHES &middot; ALL: EVERY TAB TOGETHER &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
@@ -778,7 +778,7 @@ function topicsOf(item) {
 // ── Tab routing ──
 // AI topics belong to the AI Wire and Lawsuit Intelligencer's other beats to the INTELLIGENCER
 // tab. A topic's searches run in its tab, and a story that proves the topic shows there whichever
-// channel fetched it. A story covering both goes to the AI Wire. ALL carries everything else.
+// channel fetched it. A story covering both goes to the AI Wire. ALL shows every tab together.
 var AI_TOPIC_CORES = { "ai chatbot": 1, "ai in court": 1, "ai data center": 1 };
 var AI_WORDS = /\b(ai|a\.i\.|artificial intelligence|generative ai|chatgpt|chatbots?|openai|llms?)\b/i;
 var INTEL_TOPIC_CORES = {
@@ -806,7 +806,7 @@ function chan(item) {
 
 function inTab(item, tab) {
   var c = chan(item);
-  return tab === "all" ? (c !== "ai" && c !== "intel") : c === tab;
+  return tab === "all" || c === tab;
 }
 
 // Tags shown on a story: firms it names, topics it proves, and the AI search or one-off
@@ -845,12 +845,13 @@ function highlight(text, words) {
 }
 
 // Your tracked topics, in your order, each with how many stories in this tab cover it.
-// The AI Wire and INTELLIGENCER tabs list their own topics; every other tab lists the rest.
+// ALL lists every topic. The AI Wire and INTELLIGENCER tabs list their own, and the News and
+// Firm Wires list the rest.
 function renderTopicBar(list) {
   var bar = document.getElementById("topicBar");
   var scrollLeft = bar.scrollLeft;
   var want = filter === "ai" || filter === "intel" ? filter : "";
-  var topics = settings.topics.filter(function (t) { return topicTab(t) === want; });
+  var topics = settings.topics.filter(function (t) { return filter === "all" || topicTab(t) === want; });
   if (activeTopic && topics.indexOf(activeTopic) === -1) activeTopic = "";
   if (!topics.length) { bar.innerHTML = ""; return; }
   var counts = {};
@@ -1261,7 +1262,6 @@ function renderFeed() {
   });
 
   // Tab counts follow the search, so each tab shows how many of its stories match.
-  // ALL counts everything outside the AI Wire.
   ["all"].concat(CHANNEL_KEYS).forEach(function (tab) {
     document.getElementById("ct-" + tab).textContent = hits.filter(function (i) { return inTab(i, tab); }).length;
   });
