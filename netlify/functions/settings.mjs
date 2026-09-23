@@ -11,7 +11,7 @@ import { getStore } from "@netlify/blobs";
 const KEY = "settings";
 const LISTS = [
   "topics", "outlets", "blockedSources", "trustedSources", "newsFeeds",
-  "firmWatch", "firmFeeds", "aiSearches", "aiFeeds",
+  "firmWatch", "firmFeeds", "aiSearches", "aiFeeds", "blockedTerms",
 ];
 
 // Keep only the fields the page uses, as the types it expects, so a bad write can't break the page.
