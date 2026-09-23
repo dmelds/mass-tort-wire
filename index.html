@@ -686,23 +686,35 @@ var TOPIC_RULES = {
       "i")
   },
   "nec baby formula": {
-    names: ["necrotizing enterocolitis"],
+    names: ["necrotizing enterocolitis", "preterm infant formula", "premature infant formula", "preterm formula",
+            "enfamil", "similac"],
     loose: ["nec"],
     context: /\b(formula|infants?|bab(y|ies)|premature|preterm|preemies?|abbott|mead johnson|similac|enfamil)\b/i
   },
   "byheart": { names: ["infant botulism"] },
-  "video game addiction": { names: ["gaming addiction", "game addiction", "gaming disorder"] },
+  "video game addiction": {
+    names: ["gaming addiction", "game addiction", "gaming disorder", "roblox addiction", "fortnite addiction",
+            "minecraft addiction"],
+    loose: ["video game", "roblox", "fortnite", "minecraft", "call of duty"],
+    context: /\baddict\w*/i
+  },
   "ai data center": {
     names: ["colossus"],
     loose: ["data center", "data centre"],
     context: /\b(lawsuits?|sued|sues|suing|class action|pollution|permits?|courts?|residents|turbines?|emissions)\b/i
   },
-  "qui tam": { names: ["false claims act", "whistleblower lawsuit"] },
+  // FCA also means the UK Financial Conduct Authority, so it counts only next to a DOJ or relator word.
+  "qui tam": {
+    names: ["false claims act", "whistleblower lawsuit", "relator"],
+    loose: ["fca"],
+    context: /\b(doj|justice|relators?|whistleblow\w*|qui tam|false claims)\b/i
+  },
   "law firm mso": {
-    names: ["management services organization", "alternative business structure", "fee sharing",
-            "nonlawyer ownership", "non-lawyer ownership", "private equity law firm", "law firm private equity"],
-    loose: ["mso"],
-    context: /\b(law firms?|lawyers?|attorneys?|legal|plaintiffs?)\b/i
+    names: ["management services organization", "managed services organization", "alternative business structure",
+            "fee sharing", "nonlawyer ownership", "non-lawyer ownership", "private equity law firm",
+            "law firm private equity", "law firm back office", "rule 5.4"],
+    loose: ["mso", "private equity", "outside investment"],
+    context: /\b(law firms?|lawyers?|attorneys?|legal|litigation)\b/i
   },
   "mass tort advertising": {
     names: ["legal advertising", "lawyer advertising", "attorney advertising", "lawsuit advertising",
