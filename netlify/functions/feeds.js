@@ -21,7 +21,7 @@
 //
 // Returns { items: [...], feeds: [...] }.
 // `items` keeps the original shape (title, url, date, summary, source) plus
-// `host` and `matched`. `feeds` is a per-feed health report.
+// `time` (full publish timestamp, ISO), `host` and `matched`. `feeds` is a per-feed health report.
 
 const UA = "Mozilla/5.0 (SignalsDesk RSS reader)";
 const FETCH_MS = 6000;   // per request
@@ -68,6 +68,13 @@ function isoDate(raw) {
   return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
+// The full publish time, so the page can sort a day's stories newest first and show the hour.
+function isoTime(raw) {
+  if (!raw) return "";
+  const d = new Date(raw.trim());
+  return isNaN(d.getTime()) ? "" : d.toISOString();
+}
+
 function hostOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
 }
@@ -111,6 +118,7 @@ function parseFeed(xml, feedUrl) {
       title,
       url: clean(tag(block, "link")) || clean(tag(block, "guid")),
       date: isoDate(clean(tag(block, "pubDate")) || clean(tag(block, "dc:date"))),
+      time: isoTime(clean(tag(block, "pubDate")) || clean(tag(block, "dc:date"))),
       // Aggregator descriptions only repeat the headline and publisher.
       summary: aggregator ? "" : truncate(clean(tag(block, "description")), 220),
       source: pub || source,
@@ -126,6 +134,7 @@ function parseFeed(xml, feedUrl) {
       title: clean(tag(block, "title")),
       url: alt ? decode(alt[1]) : "",
       date: isoDate(clean(tag(block, "published")) || clean(tag(block, "updated"))),
+      time: isoTime(clean(tag(block, "published")) || clean(tag(block, "updated"))),
       summary: truncate(clean(tag(block, "summary") || tag(block, "content")), 220),
       source,
       host,
