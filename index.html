@@ -191,7 +191,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search, up to 20. State attorney general lawsuit also runs a state consumer-statute search and a tech company trial search. AI topics search for the AI Wire, Intelligencer topics for the INTELLIGENCER tab, and the rest for the News Wire. A story that covers an AI or Intelligencer topic shows in that tab. ALL shows every tab together.</p>
+  <p class="hint">Each topic runs as a Google News search, up to 20. State attorney general lawsuit also runs a state consumer-statute search and a tech company trial search. AI topics search for the AI Wire, Intelligencer topics for the INTELLIGENCER tab, and the rest for the News Wire. A story that covers an AI or Intelligencer topic shows in that tab. NEWS WIRE shows all the news, those stories included. ALL shows every tab together.</p>
 
   <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
   <textarea id="outletsInput" rows="3"></textarea>
@@ -255,7 +255,7 @@
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS, FIRM NAME SEARCHES + FIRM RSS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; INTELLIGENCER: INTELLIGENCER TOPIC SEARCHES &middot; ALL: EVERY TAB TOGETHER &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
+  NEWS WIRE: GOOGLE NEWS TOPIC + OUTLET SEARCHES, NEWS SITE RSS, FIRM NAME SEARCHES + FIRM RSS, PLUS EVERY INTELLIGENCER STORY AND EVERY AI STORY ON YOUR TOPICS &middot; AI WIRE: AI TOPICS + AI-IN-LAW SEARCHES + LEGAL TECH RSS &middot; INTELLIGENCER: INTELLIGENCER TOPIC SEARCHES &middot; ALL: EVERY TAB TOGETHER &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
@@ -878,9 +878,14 @@ function chan(item) {
   return item.channel;
 }
 
+// NEWS WIRE carries all the news: every story from every tab, except AI Wire items that cover none
+// of your tracked topics, which are legal tech posts and AI-in-law commentary rather than news.
+// INTELLIGENCER and AI WIRE each keep only their own stories.
 function inTab(item, tab) {
+  if (tab === "all") return true;
   var c = chan(item);
-  return tab === "all" || c === tab;
+  if (tab === "news") return c !== "ai" || topicsOf(item).length > 0;
+  return c === tab;
 }
 
 // Tags shown on a story: firms it names, topics it proves, and the AI search or one-off
@@ -919,13 +924,12 @@ function highlight(text, words) {
 }
 
 // Your tracked topics, in your order, each with how many stories in this tab cover it.
-// ALL lists every topic. The AI Wire and INTELLIGENCER tabs list their own, and the News Wire
-// lists the rest.
+// ALL and the News Wire list every topic. The AI Wire and INTELLIGENCER tabs list their own.
 function renderTopicBar(list) {
   var bar = document.getElementById("topicBar");
   var scrollLeft = bar.scrollLeft;
   var want = filter === "ai" || filter === "intel" ? filter : "";
-  var topics = settings.topics.filter(function (t) { return filter === "all" || topicTab(t) === want; });
+  var topics = settings.topics.filter(function (t) { return !want || topicTab(t) === want; });
   if (activeTopic && topics.indexOf(activeTopic) === -1) activeTopic = "";
   if (!topics.length) { bar.innerHTML = ""; return; }
   var counts = {};
