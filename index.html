@@ -191,7 +191,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search, up to 20. AI topics search for the AI Wire, Intelligencer topics for the INTELLIGENCER tab, and the rest for the News Wire. A story that covers an AI or Intelligencer topic shows in that tab. ALL shows every tab together.</p>
+  <p class="hint">Each topic runs as a Google News search, up to 20. State attorney general lawsuit also runs a state consumer-statute search and a tech company trial search. AI topics search for the AI Wire, Intelligencer topics for the INTELLIGENCER tab, and the rest for the News Wire. A story that covers an AI or Intelligencer topic shows in that tab. ALL shows every tab together.</p>
 
   <div class="label">OUTLETS SEARCHED FOR YOUR TOPICS (ONE DOMAIN PER LINE)</div>
   <textarea id="outletsInput" rows="3"></textarea>
@@ -261,11 +261,14 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 11;
+var SETTINGS_VERSION = 12;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: [
     "AFFF lawsuit", "PFAS litigation", "Roundup settlement", "Depo-Provera lawsuit", "hair relaxer lawsuit", "mass tort",
+    // Litigations with a Lawsuit Informer updates page (Ozempic runs under GLP-1 lawsuit)
+    "asbestos lawsuit", "paraquat lawsuit", "talc lawsuit", "Tylenol lawsuit", "transvaginal mesh lawsuit",
+    "social media addiction lawsuit", "House v. NCAA settlement",
     // Lawsuit Intelligencer's beats
     "AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit", "video game addiction lawsuit",
     "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising", "state attorney general lawsuit",
@@ -324,7 +327,9 @@ var ADDED = {
                 "mass tort advertising"] },
   9: { blockedTerms: ["police + AI", "cop + AI"] },
   10: { topics: ["state attorney general lawsuit"] },
-  11: { topics: ["GLP-1 lawsuit", "wildfire lawsuit"] }
+  11: { topics: ["GLP-1 lawsuit", "wildfire lawsuit"] },
+  12: { topics: ["asbestos lawsuit", "paraquat lawsuit", "talc lawsuit", "Tylenol lawsuit", "transvaginal mesh lawsuit",
+                 "social media addiction lawsuit", "House v. NCAA settlement"] }
 };
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
@@ -657,6 +662,18 @@ function tagLabel(t) {
 // own headline or summary names the topic, or a name the press uses for it.
 //   names: other names that prove the topic on their own
 //   loose: words that also mean other things, so they count only when `context` is in the story too
+//   also:  a pattern that proves the topic on its own, for stories the press writes without the topic's name
+// Shared by the state attorney general rule's two proof paths.
+var AG_FEDERAL = "u\\.s\\. attorney general|us attorney general|justice department|department of justice|doj|federal|" +
+  "trump|administration|governor|white house";
+var AG_COMPANIES = "openai|chatgpt|character\\.ai|meta|facebook|instagram|whatsapp|tiktok|snap|snapchat|roblox|google|youtube|" +
+  "discord|xai";
+var AG_STATES = "alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|" +
+  "illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|" +
+  "montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|" +
+  "pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|" +
+  "wisconsin|wyoming|d\\.c\\.|district of columbia|puerto rico";
+
 var TOPIC_RULES = {
   "pfas": { names: ["forever chemical", "pfoa", "pfos"] },
   "afff": { names: ["firefighting foam", "firefighter foam", "fire-fighting foam", "aqueous film"] },
@@ -672,6 +689,26 @@ var TOPIC_RULES = {
     names: ["eaton fire", "palisades fire", "lahaina fire", "maui fire"],
     loose: ["wildfire"],
     context: /\b(lawsuits?|sued|sues|suing|trial|settle\w*|liabilit\w*|verdicts?|claims?|inverse condemnation|mdl|utility|utilities|edison|pg&e|pacificorp|hawaiian electric|xcel)\b/i
+  },
+  // Litigations with a Lawsuit Informer updates page
+  "asbestos": { names: ["mesothelioma"] },
+  "paraquat": { names: ["gramoxone", "mdl 3004"] },
+  "talc": { names: ["talcum powder", "baby powder", "red river talc", "mdl 2738"] },
+  "tylenol": {
+    names: ["mdl 3043"],
+    loose: ["acetaminophen", "paracetamol"],
+    context: /\b(autism|adhd|pregnan\w*|prenatal|lawsuits?|sued|sues|suing|mdl|appeal\w*|litigation)\b/i
+  },
+  "transvaginal mesh": { names: ["pelvic mesh", "vaginal mesh", "pelvic organ prolapse mesh"] },
+  "social media addiction": {
+    names: ["mdl 3047", "jccp 5255", "social media harm"],
+    loose: ["social media", "instagram", "tiktok", "snapchat", "youtube", "meta"],
+    context: /^(?=.*\b(addict\w*|mental health|teens?|youth|minors|children|kids|adolescents?|school districts?)\b)(?=.*\b(lawsuits?|sued|sues|suing|trials?|jury|jurors|verdicts?|bellwether|mdl|jccp|settle\w*|litigation)\b)/i
+  },
+  "house v. ncaa": {
+    names: ["house v ncaa", "house settlement", "ncaa settlement", "college sports commission"],
+    loose: ["ncaa"],
+    context: /\b(settle\w*|antitrust|back ?pay|damages|payouts?|revenue[- ]sharing|claims?|appeals?|nil)\b/i
   },
   // Mass tort news usually says MDL or bellwether, not "mass tort".
   "mass tort": { names: ["multidistrict litigation", "mdl", "bellwether", "jpml"] },
@@ -729,17 +766,26 @@ var TOPIC_RULES = {
   // settlements. A story needs a named state or multistate coalition, an enforcement word, and a
   // consumer-harm word or a company Intelligencer tracks. Stories naming the federal side, the Trump
   // administration or a governor are out, which drops suits against the administration and state politics.
+  // AP headlined New Mexico's Facebook trial "Facebook accused of deceiving users in New Mexico as trial
+  // over privacy scandal wraps up" and never said attorney general, so `also` proves a story on its own:
+  // a tech company Intelligencer tracks, a named state, a trial or suit word, and a deception or harm word.
   "state attorney general": {
     loose: ["state attorney general", "state attorneys general", "attorney general", "attorneys general", "ag", "ags"],
     context: new RegExp(
-      "^(?!.*\\b(u\\.s\\. attorney general|us attorney general|justice department|department of justice|doj|federal|" +
-      "trump|administration|governor|white house)\\b)" +
+      "^(?!.*\\b(" + AG_FEDERAL + ")\\b)" +
       "(?=.*\\b(sues?|sued|suing|lawsuits?|complaint|subpoena\\w*|investigat\\w*|settle\\w*|" +
-      "civil investigative demand|cease[- ]and[- ]desist|enforcement)\\b)" +
-      "(?=.*\\b(consumers?|deceptive|unfair|fraud\\w*|mislead\\w*|misled|safety|harm\\w*|children|kids|teens?|minors|" +
+      "civil investigative demand|cease[- ]and[- ]desist|enforcement|trials?|jury|jurors|verdicts?|civil penalt\\w*)\\b)" +
+      "(?=.*\\b(consumers?|deceptive|deceiv\\w*|unfair|fraud\\w*|mislead\\w*|misled|safety|harm\\w*|children|kids|teens?|minors|" +
       "health|cancer|pfas|chemicals?|pollut\\w*|contaminat\\w*|opioids?|drugs?|products?|addict\\w*|privacy|" +
-      "chatbots?|ai|openai|character\\.ai|meta|tiktok|snap|roblox|google|xai)\\b)" +
-      "(?=.*\\b(state|states|multistate|bipartisan|coalition|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|d\\.c\\.|district of columbia|puerto rico)\\b)",
+      "chatbots?|ai|" + AG_COMPANIES + ")\\b)" +
+      "(?=.*\\b(state|states|multistate|bipartisan|coalition|" + AG_STATES + ")\\b)",
+      "i"),
+    also: new RegExp(
+      "^(?!.*\\b(" + AG_FEDERAL + ")\\b)" +
+      "(?=.*\\b(" + AG_COMPANIES + ")\\b)" +
+      "(?=.*\\b(" + AG_STATES + ")\\b)" +
+      "(?=.*\\b(trials?|jury|jurors|verdicts?|sues?|sued|suing|lawsuits?|settle\\w*|civil penalt\\w*)\\b)" +
+      "(?=.*\\b(deceiv\\w*|deceptive|mislead\\w*|misled|unfair|privacy|children|kids|teens?|minors|addict\\w*|safety|harm\\w*)\\b)",
       "i")
   },
   "mass tort advertising": {
@@ -772,7 +818,8 @@ function topicPattern(topic) {
     ambiguous: ambiguous,
     strict: namesRx((ambiguous || (rule.loose || []).indexOf(core) !== -1 ? [] : [core]).concat(rule.names || [])),
     loose: namesRx((ambiguous ? [core] : []).concat(rule.loose || [])),
-    context: rule.context || null
+    context: rule.context || null,
+    also: rule.also || null
   };
   return topicRx[topic];
 }
@@ -780,6 +827,7 @@ function topicPattern(topic) {
 function topicProven(topic, text) {
   var p = topicPattern(topic);
   if (p.strict && p.strict.test(text)) return true;
+  if (p.also && p.also.test(text)) return true;
   if (!p.loose || !p.loose.test(text)) return false;
   // Bare "Roundup" has to be out of digest form; other loose words need their context.
   if (p.ambiguous) return !DIGEST_BEFORE.test(text) && !DIGEST_AFTER.test(text);
@@ -994,6 +1042,19 @@ function gnews(q) {
 var AMBIGUOUS_TERMS = { roundup: 1 };
 var TOPIC_PAIRS = ["settlement", "lawsuit", "litigation", "MDL", "verdict", "trial", "deal"];
 
+// Extra Google News searches for a topic whose coverage rarely uses the topic's own words. State
+// consumer-protection trials are written as "attorneys representing New Mexico" and "the state's
+// Unfair Practices Act", so "state attorney general lawsuit" missed AP's Facebook trial story.
+// Google News searches the article body, so the statute names find it.
+var EXTRA_SEARCHES = {
+  "state attorney general": [
+    '("Unfair Practices Act" OR "Deceptive Trade Practices Act" OR "Consumer Protection Act" OR "Consumer Fraud Act" OR ' +
+      '"Unfair Trade Practices") (trial OR jury OR jurors OR verdict OR sues OR lawsuit)',
+    '(Meta OR Facebook OR Instagram OR TikTok OR Snapchat OR Roblox OR OpenAI OR "Character.AI") ' +
+      '(jury OR jurors OR trial OR verdict) ("attorney general" OR "the state")'
+  ]
+};
+
 function googleNewsUrl(topic) {
   var term = coreTerm(topic).replace(/"/g, "");
   if (AMBIGUOUS_TERMS[term.toLowerCase()]) {
@@ -1017,6 +1078,9 @@ var OUTLET_EXCLUDES = { "yahoo.com": " -site:sports.yahoo.com" };
 // A site: search on a generic term like "Roundup" returns most of what the outlet published,
 // and the newest ten win the slot, which is how MLB roundups reach a mass tort wire.
 // intitle: makes the outlet put the term in the headline before the item counts.
+// Google web search ignores words past the 32nd. With 25 topics in one query the tail topics would
+// never be searched, so the terms are split into groups that keep each query under that limit.
+var OUTLET_TERM_WORDS = 18;
 function outletSearches() {
   var terms = settings.topics.map(coreTerm).filter(Boolean)
     .map(function (t) {
@@ -1024,12 +1088,23 @@ function outletSearches() {
       return /\s/.test(term) ? 'intitle:"' + term + '"' : "intitle:" + term;
     });
   if (!terms.length) return [];
-  return settings.outlets.map(function (d) {
-    return {
-      url: gnews("site:" + d + " (" + terms.join(" OR ") + ") " + LEGAL_CONTEXT + (OUTLET_EXCLUDES[d] || "") + whenClause()),
-      label: (OUTLET_NAMES[d] || d) + " (site search)"
-    };
+  var groups = [[]], used = 0;
+  terms.forEach(function (t) {
+    var w = t.split(/\s+/).length;
+    if (used && used + w > OUTLET_TERM_WORDS) { groups.push([]); used = 0; }
+    groups[groups.length - 1].push(t);
+    used += w;
   });
+  var out = [];
+  settings.outlets.forEach(function (d) {
+    groups.forEach(function (g, n) {
+      out.push({
+        url: gnews("site:" + d + " (" + g.join(" OR ") + ") " + LEGAL_CONTEXT + (OUTLET_EXCLUDES[d] || "") + whenClause()),
+        label: (OUTLET_NAMES[d] || d) + " (site search" + (groups.length > 1 ? " " + (n + 1) : "") + ")"
+      });
+    });
+  });
+  return out;
 }
 
 function firmSearches() {
@@ -1041,9 +1116,13 @@ function firmSearches() {
 // Topic searches for one tab: "ai", "intel", or "" for the News Wire.
 function topicSearches(tab) {
   return settings.topics.filter(function (t) { return topicTab(t) === tab; })
-    .slice(0, MAX_TOPIC_SEARCHES).map(function (t) {
-      return { url: googleNewsUrl(t), topic: t };
-    });
+    .slice(0, MAX_TOPIC_SEARCHES).reduce(function (out, t) {
+      out.push({ url: googleNewsUrl(t), topic: t });
+      (EXTRA_SEARCHES[coreTerm(t).toLowerCase()] || []).forEach(function (q, n) {
+        out.push({ url: gnews(q + whenClause()), topic: t, label: t + " (search " + (n + 2) + ")" });
+      });
+      return out;
+    }, []);
 }
 
 // The News Wire also carries the firm watch: firm name searches and firm blog feeds. Merging them
