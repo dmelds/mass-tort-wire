@@ -274,13 +274,13 @@
 <main id="feed"></main>
 
 <footer>
-  NEWS WIRE: EVERY STORY ON THE WIRE, GROUPED BY DAY &middot; INTELLIGENCER: STORIES ON LAWSUIT INTELLIGENCER'S BEATS &middot; AI WIRE: AI TOPICS, AI-IN-LAW SEARCHES AND LEGAL TECH FEEDS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
+  NEWS WIRE: EVERY STORY ON THE WIRE, GROUPED BY DAY &middot; NEW: REACHED THIS DEVICE IN THE LAST 24 HOURS &middot; INTELLIGENCER: STORIES ON LAWSUIT INTELLIGENCER'S BEATS &middot; AI WIRE: AI TOPICS, AI-IN-LAW SEARCHES AND LEGAL TECH FEEDS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 12;
+var SETTINGS_VERSION = 13;
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: [
@@ -310,7 +310,9 @@ var DEFAULTS = {
   trustedSources: ["Reuters", "reuters.com", "Law360", "law360.com"],
   // Stories to keep off the wire entirely. Copyright and AI training-data fights are off-beat.
   blockedTerms: ["copyright", "fair use", "training data", "scraping", "user agreement", "AI data case",
-                 "police + AI", "cop + AI"],
+                 "police + AI", "cop + AI",
+                 // The 1982 Chicago cyanide case resurfaces with every documentary and anniversary.
+                 "Tylenol murder", "Tylenol poisoning", "Tylenol killing", "Tylenol + cyanide"],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
     "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
@@ -348,11 +350,14 @@ var ADDED = {
   10: { topics: ["state attorney general lawsuit"] },
   11: { topics: ["GLP-1 lawsuit", "wildfire lawsuit"] },
   12: { topics: ["asbestos lawsuit", "paraquat lawsuit", "talc lawsuit", "Tylenol lawsuit", "transvaginal mesh lawsuit",
-                 "social media addiction lawsuit", "House v. NCAA settlement"] }
+                 "social media addiction lawsuit", "House v. NCAA settlement"] },
+  13: { blockedTerms: ["Tylenol murder", "Tylenol poisoning", "Tylenol killing", "Tylenol + cyanide"] }
 };
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
-var SEEN_KEY = "mtw:seen:v2";
+var SEEN_KEY = "mtw:seen:v3";      // url -> when this device first saw it (ms)
+var SEEN_KEY_V2 = "mtw:seen:v2";   // older list of seen urls, read once and retired
+var NEW_HOURS = 24;                // NEW: first arrived on this device within this many hours
 var BATCH = 12;               // feeds function limit per call
 var CHANNELS = { news: "NEWS WIRE", intel: "INTELLIGENCER", ai: "AI WIRE" };
 var CHANNEL_KEYS = ["news", "intel", "ai"];
@@ -399,7 +404,40 @@ function applySettings(stored) {
 
 var storedSettings = load(STORE_KEY, null);
 if (applySettings(storedSettings)) save(STORE_KEY, settings);
-var seenBefore = load(SEEN_KEY, null);   // null on first visit: no NEW badges
+// NEW used to mean "absent from the last scan", which went blank on every reopen, since the app
+// scans on open. Now a story is NEW for 24 hours after it first reaches this device.
+var firstSeen = load(SEEN_KEY, null);
+if (!firstSeen || typeof firstSeen !== "object" || Array.isArray(firstSeen)) {
+  firstSeen = {};
+  var seenV2 = load(SEEN_KEY_V2, null);
+  if (Array.isArray(seenV2)) {
+    // Stories the old list had seen were on the wire before this version: give them an old date.
+    var legacy = Date.now() - 31 * 86400000;
+    seenV2.forEach(function (u) { firstSeen[u] = legacy; });
+  }
+  save(SEEN_KEY, firstSeen);
+}
+
+// Record arrivals, then drop entries older than the wire's longest window. A story older than
+// 30 days can't come back through a 30-day search, so nothing needed stays forgotten.
+function noteSeen(list) {
+  var now = Date.now(), changed = false;
+  list.forEach(function (i) {
+    if (i.url && firstSeen[i.url] === undefined) { firstSeen[i.url] = now; changed = true; }
+  });
+  if (!changed) return;
+  var keys = Object.keys(firstSeen);
+  if (keys.length > 3000) {
+    var cutoff = now - 45 * 86400000;
+    keys.forEach(function (k) { if (firstSeen[k] < cutoff) delete firstSeen[k]; });
+    keys = Object.keys(firstSeen);
+    if (keys.length > 3000) {
+      keys.sort(function (a, b) { return firstSeen[a] - firstSeen[b]; })
+        .slice(0, keys.length - 3000).forEach(function (k) { delete firstSeen[k]; });
+    }
+  }
+  save(SEEN_KEY, firstSeen);
+}
 var items = [];
 var errors = {};
 var health = { news: [], intel: [], ai: [] };
@@ -672,6 +710,7 @@ function searchGoogleNews(q) {
       items.push(it);
       added++;
     });
+    noteSeen(res.items);
     adhoc[key] = { state: "done", found: res.items.length, added: added };
   }).catch(function (err) {
     adhoc[key] = { state: "error", error: err && err.message ? err.message : "SEARCH FAILED" };
@@ -724,10 +763,12 @@ var TOPIC_RULES = {
   "asbestos": { names: ["mesothelioma"] },
   "paraquat": { names: ["gramoxone", "mdl 3004"] },
   "talc": { names: ["talcum powder", "baby powder", "red river talc", "mdl 2738"] },
+  // "Tylenol" alone also brings the 1982 Chicago poisonings back every time a documentary airs,
+  // so the name needs litigation or autism context, and a murder story never counts.
   "tylenol": {
     names: ["mdl 3043"],
-    loose: ["acetaminophen", "paracetamol"],
-    context: /\b(autism|adhd|pregnan\w*|prenatal|lawsuits?|sued|sues|suing|mdl|appeal\w*|litigation)\b/i
+    loose: ["tylenol", "acetaminophen", "paracetamol"],
+    context: /^(?!.*\b(murders?|poisonings?|cyanide|killings?|cold case|killer)\b)(?=.*\b(autism|adhd|pregnan\w*|prenatal|lawsuits?|sued|sues|suing|mdl|appeals?|appellate|litigation|second circuit|kenvue|plaintiffs?|verdicts?|settle\w*)\b)/i
   },
   "transvaginal mesh": { names: ["pelvic mesh", "vaginal mesh", "pelvic organ prolapse mesh"] },
   "social media addiction": {
@@ -1314,6 +1355,7 @@ function runScan() {
   function run(ch, fn) {
     return fn().then(function (res) {
       items = items.concat(res);
+      noteSeen(res);
       setStatus(ch, res.length ? "done" : "empty");
     }).catch(function (err) {
       errors[ch] = err && err.message ? err.message : "UNKNOWN ERROR";
@@ -1327,10 +1369,6 @@ function runScan() {
   Promise.allSettled([
     run("news", fetchNews), run("intel", fetchIntel), run("ai", fetchAI)
   ]).then(function () {
-    // Remember everything shown so the next visit can mark what's new.
-    var keys = items.map(function (i) { return i.url; });
-    var prior = seenBefore || [];
-    save(SEEN_KEY, keys.concat(prior.filter(function (k) { return keys.indexOf(k) === -1; })).slice(0, 600));
     scanning = false;
     btn.disabled = false;
     btn.textContent = "RUN SCAN";
@@ -1347,7 +1385,8 @@ function esc(s) {
 }
 
 function isNew(item) {
-  return seenBefore !== null && seenBefore.indexOf(item.url) === -1;
+  var t = firstSeen[item.url];
+  return t !== undefined && t >= Date.now() - NEW_HOURS * 3600000;
 }
 
 // Newest first. A story with a publish time sorts by it; one with only a date sorts at the
@@ -1538,9 +1577,9 @@ function renderFeed() {
   }
 
   if (scanned && newOnly) {
-    html += '<div class="notice">SHOWING ' + newCount + ' NEW SINCE YOUR LAST SCAN<button data-act="newonly">SHOW ALL</button></div>';
+    html += '<div class="notice">SHOWING ' + newCount + ' NEW IN THE LAST 24 HOURS<button data-act="newonly">SHOW ALL</button></div>';
   } else if (scanned && newCount) {
-    html += '<div class="notice">' + newCount + ' NEW SINCE YOUR LAST SCAN<button data-act="newonly">NEW ONLY</button></div>';
+    html += '<div class="notice">' + newCount + ' NEW IN THE LAST 24 HOURS<button data-act="newonly">NEW ONLY</button></div>';
   }
 
   if (scanned && searching) html += searchNote(visible.length);
@@ -1548,9 +1587,7 @@ function renderFeed() {
   if (!scanned) {
     html += '<div class="empty-state"><p class="display">The wire is quiet.</p><p>Run a scan to pull the latest news and firm posts.</p></div>';
   } else if (!visible.length && !scanning && !searching) {
-    html += '<div class="notice">' + (newOnly
-      ? (seenBefore === null ? "FIRST VISIT ON THIS DEVICE: NOTHING IS MARKED NEW YET. THE NEXT SCAN WILL MARK WHAT ARRIVED SINCE THIS ONE."
-                             : "NOTHING NEW SINCE YOUR LAST SCAN IN THIS TAB.")
+    html += '<div class="notice">' + (newOnly ? "NOTHING NEW IN THE LAST 24 HOURS IN THIS TAB."
       : settings.topicsOnly ? "NOTHING MATCHES YOUR TOPICS IN THIS WINDOW." : "NO ITEMS IN THIS WINDOW.") + '</div>';
   }
 
