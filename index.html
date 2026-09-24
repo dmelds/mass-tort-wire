@@ -1114,15 +1114,28 @@ function firmSearches() {
 }
 
 // Topic searches for one tab: "ai", "intel", or "" for the News Wire.
+// Google News returns about 100 results per search, ranked by relevance, not date. On a busy topic
+// a 30-day search fills those 100 with older stories and yesterday's news never arrives. Each search
+// therefore also runs limited to the last day, so the newest stories come in whatever the window.
+function withTodayPass(entries) {
+  var out = [];
+  entries.forEach(function (e) {
+    out.push(e);
+    var today = e.url.replace(/%20when%3A\d+d(?=&|$)/, "%20when%3A1d");
+    if (today !== e.url) out.push({ url: today, topic: e.topic, label: (e.label || e.topic) + " (last 24 hours)" });
+  });
+  return out;
+}
+
 function topicSearches(tab) {
-  return settings.topics.filter(function (t) { return topicTab(t) === tab; })
+  return withTodayPass(settings.topics.filter(function (t) { return topicTab(t) === tab; })
     .slice(0, MAX_TOPIC_SEARCHES).reduce(function (out, t) {
       out.push({ url: googleNewsUrl(t), topic: t });
       (EXTRA_SEARCHES[coreTerm(t).toLowerCase()] || []).forEach(function (q, n) {
         out.push({ url: gnews(q + whenClause()), topic: t, label: t + " (search " + (n + 2) + ")" });
       });
       return out;
-    }, []);
+    }, []));
 }
 
 // The News Wire also carries the firm watch: firm name searches and firm blog feeds. Merging them
@@ -1142,9 +1155,9 @@ function fetchNews() {
 // Each AI line is the search, run verbatim. The line also tags every item it returns,
 // so an AI story shows the beat it came from. That tag is not one of your topics.
 function aiSearches() {
-  return settings.aiSearches.slice(0, 12).map(function (q) {
+  return withTodayPass(settings.aiSearches.slice(0, 12).map(function (q) {
     return { url: gnews(q + whenClause()), topic: q };
-  });
+  }));
 }
 
 function fetchIntel() {
