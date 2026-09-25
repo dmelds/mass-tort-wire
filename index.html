@@ -239,8 +239,8 @@
   <p class="hint">A publisher name as shown on items, or a domain. Applies to every tab.</p>
 
   <div class="label">BLOCKED WORDS (ONE PER LINE)</div>
-  <textarea id="blockedTermsInput" rows="3"></textarea>
-  <p class="hint">A story whose headline or summary uses one of these words or phrases is hidden from every tab. Plurals and -ed/-ing forms count too, so "copyright" also hides "copyrighted". Join words with + to hide a story only when it uses all of them: "police + AI" hides police AI stories and leaves other police news.</p>
+  <textarea id="blockedTermsInput" rows="6"></textarea>
+  <p class="hint">A story whose headline or summary uses one of these words or phrases is hidden from every tab. Plurals and -ed/-ing forms count too, so "copyright" also hides "copyrighted". Join words with + to hide a story only when it uses all of them: "police + AI" hides police AI stories and leaves other police news. A slash lists choices for one slot: "stock/share + jump/fall" hides "Bayer shares fall" and "Bayer stock jumps".</p>
 
   <div class="config-foot">
     <span class="hint" id="syncStatus"></span>
@@ -280,7 +280,10 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 13;
+var SETTINGS_VERSION = 14;
+// The ways a headline says a price moved. One rule, since a blocked word can list choices
+// with a slash: "stock/share + jump/fall" hides "Bayer shares fall" and "Bayer stock jumps".
+var STOCK_MOVES = "jump/fall/fell/drop/dropped/rise/rose/slide/slid/surge/plunge/tumble/soar/rally/rallied/climb/sink/sank/slump/dip/dipped/gain/tank/rebound/dive/spike/slip/slipped/skid/skidded/mover/trading/ticker/upgrade/downgrade/valuation/investor/analyst";
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: [
@@ -303,7 +306,17 @@ var DEFAULTS = {
     // Rewrites one story into a new headline every few minutes, so each rewrite is a
     // fresh link and earns a NEW badge. Eight variants of one Bayer story in one scan.
     "AD HOC NEWS", "ad-hoc-news.de",
-    "India Gazette", "indiagazette.com"
+    "India Gazette", "indiagazette.com",
+    // Stock-picking publishers. Their "Bayer" stories are price moves and analyst ratings,
+    // and the verdict behind a price move reaches the wire from Reuters and Law360 anyway.
+    "The Motley Fool", "Motley Fool", "fool.com", "Seeking Alpha", "seekingalpha.com",
+    "Zacks", "Zacks Investment Research", "zacks.com", "MarketBeat", "marketbeat.com",
+    "Benzinga", "benzinga.com", "TipRanks", "tipranks.com", "InvestorPlace", "investorplace.com",
+    "Simply Wall St", "simplywall.st", "Barchart", "barchart.com", "GuruFocus", "gurufocus.com",
+    "Investing.com", "investing.com", "Nasdaq", "nasdaq.com", "Stocktwits", "stocktwits.com",
+    "StockTitan", "stocktitan.net", "Finviz", "finviz.com", "AInvest", "ainvest.com",
+    "Investor's Business Daily", "investors.com", "The Globe and Mail", "theglobeandmail.com",
+    "MarketScreener", "marketscreener.com", "Sharewise", "sharewise.com"
   ],
   // Publishers exempt from the topic check on a topic search. Reuters headlines a PFAS
   // story "forever chemicals" and never says PFAS, and the story is still the story.
@@ -312,7 +325,16 @@ var DEFAULTS = {
   blockedTerms: ["copyright", "fair use", "training data", "scraping", "user agreement", "AI data case",
                  "police + AI", "cop + AI",
                  // The 1982 Chicago cyanide case resurfaces with every documentary and anniversary.
-                 "Tylenol murder", "Tylenol poisoning", "Tylenol killing", "Tylenol + cyanide"],
+                 "Tylenol murder", "Tylenol poisoning", "Tylenol killing", "Tylenol + cyanide",
+                 // Stock movement and stock-picking stories about the defendants.
+                 "stock/share + " + STOCK_MOVES, "stock + buy/sell/hold",
+                 "stock price", "share price", "price target", "analyst rating", "analyst upgrade", "analyst downgrade",
+                 "buy rating", "sell rating", "hold rating", "outperform", "underperform",
+                 "earnings call", "earnings estimate", "earnings report", "quarterly earnings", "earnings per share",
+                 "dividend", "market cap", "52-week", "premarket", "pre-market", "after-hours", "intraday",
+                 "should you buy", "buy the dip", "stock to buy", "stock to watch", "stock to sell", "stock to avoid",
+                 "top gainer", "top loser", "stock alert", "options activity", "short interest", "stock rating",
+                 "stock market", "stock exchange", "shareholder value"],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
     "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
@@ -351,7 +373,8 @@ var ADDED = {
   11: { topics: ["GLP-1 lawsuit", "wildfire lawsuit"] },
   12: { topics: ["asbestos lawsuit", "paraquat lawsuit", "talc lawsuit", "Tylenol lawsuit", "transvaginal mesh lawsuit",
                  "social media addiction lawsuit", "House v. NCAA settlement"] },
-  13: { blockedTerms: ["Tylenol murder", "Tylenol poisoning", "Tylenol killing", "Tylenol + cyanide"] }
+  13: { blockedTerms: ["Tylenol murder", "Tylenol poisoning", "Tylenol killing", "Tylenol + cyanide"] },
+  14: { blockedTerms: DEFAULTS.blockedTerms.slice(DEFAULTS.blockedTerms.indexOf("stock/share + " + STOCK_MOVES)) }
 };
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
@@ -1476,8 +1499,11 @@ function renderHealth() {
 // A story that uses a blocked word in its headline or summary is hidden everywhere.
 // "police + AI" blocks a story only when it uses both words, so other police stories still show.
 var blockedCache = { key: null, rules: [] };
+// "jump/fall/fell" is one slot that any of those words fills.
 function wordRx(w) {
-  return new RegExp("\\b" + rx(w).replace(/[\s-]+/g, "[\\s-]+") + "(?:s|es|ed|ing)?\\b", "i");
+  var alts = w.split("/").map(function (a) { return a.trim(); }).filter(Boolean)
+    .map(function (a) { return rx(a).replace(/[\s-]+/g, "[\\s-]+"); });
+  return new RegExp("\\b(?:" + alts.join("|") + ")(?:s|es|ed|ing)?\\b", "i");
 }
 function blockedRules() {
   var key = settings.blockedTerms.join("\n");
