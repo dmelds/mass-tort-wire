@@ -316,7 +316,7 @@ exports.handler = async (event) => {
     topics = Array.isArray(body.topics) ? body.topics.map(String).slice(0, 20) : [];
     days = Number(body.days) > 0 ? Number(body.days) : 0;
     perFeed = Math.min(Math.max(Number(body.perFeed) || 8, 1), 15);
-    blockSources = Array.isArray(body.blockSources) ? body.blockSources.slice(0, 50) : [];
+    blockSources = Array.isArray(body.blockSources) ? body.blockSources.slice(0, 100) : [];
     trustSources = Array.isArray(body.trustSources) ? body.trustSources.slice(0, 50) : [];
     if (!urls.length) throw new Error("no urls");
   } catch {
