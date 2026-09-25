@@ -280,7 +280,7 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 15;
+var SETTINGS_VERSION = 16;
 // The ways a headline says a price moved. One rule, since a blocked word can list choices
 // with a slash: "stock/share + jump/fall" hides "Bayer shares fall" and "Bayer stock jumps".
 var STOCK_MOVES = "jump/fall/fell/drop/dropped/rise/rose/slide/slid/surge/plunge/tumble/soar/rally/rallied/climb/sink/sank/slump/dip/dipped/gain/tank/rebound/dive/spike/slip/slipped/skid/skidded/mover/trading/ticker/upgrade/downgrade/valuation/investor/analyst";
@@ -297,7 +297,14 @@ var DEFAULTS = {
     // Lawsuit Intelligencer's beats
     "AI chatbot lawsuit", "AI in court", "NEC baby formula lawsuit", "ByHeart lawsuit", "video game addiction lawsuit",
     "AI data center lawsuit", "qui tam", "law firm MSO", "mass tort advertising", "state attorney general lawsuit",
-    "GLP-1 lawsuit", "wildfire lawsuit"
+    "GLP-1 lawsuit", "wildfire lawsuit",
+    // Litigations with pages on Lawsuit Informer or Lawsuit Center and no wire topic until v16.
+    // The News Wire runs at most MAX_TOPIC_SEARCHES topic searches, and these fill the last five.
+    "hernia mesh lawsuit", "baby food lawsuit", "ultra-processed food lawsuit", "Camp Lejeune lawsuit", "Roblox lawsuit",
+    // Intelligencer beats added in v16
+    "CIPA lawsuit", "third-party litigation funding",
+    // AI Wire beat added in v16
+    "deepfake lawsuit"
   ],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
   // Link wrappers carry a headline and no article, so a firm name search can surface
@@ -385,7 +392,9 @@ var ADDED = {
   14: { blockedTerms: DEFAULTS.blockedTerms.slice(DEFAULTS.blockedTerms.indexOf("stock/share + " + STOCK_MOVES),
                                                   DEFAULTS.blockedTerms.indexOf("stock")) },
   15: { blockedTerms: ["stock", "ETF", "bullish", "bearish", "data center demand", "data center boom + stock/ETF/invest/investor/bet",
-                       "data center + " + DATA_CENTER_POLICY] }
+                       "data center + " + DATA_CENTER_POLICY] },
+  16: { topics: ["hernia mesh lawsuit", "baby food lawsuit", "ultra-processed food lawsuit", "Camp Lejeune lawsuit",
+                 "Roblox lawsuit", "CIPA lawsuit", "third-party litigation funding", "deepfake lawsuit"] }
 };
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
@@ -805,6 +814,31 @@ var TOPIC_RULES = {
     context: /^(?!.*\b(murders?|poisonings?|cyanide|killings?|cold case|killer)\b)(?=.*\b(autism|adhd|pregnan\w*|prenatal|lawsuits?|sued|sues|suing|mdl|appeals?|appellate|litigation|second circuit|kenvue|plaintiffs?|verdicts?|settle\w*)\b)/i
   },
   "transvaginal mesh": { names: ["pelvic mesh", "vaginal mesh", "pelvic organ prolapse mesh"] },
+  "hernia mesh": {
+    names: ["bard mesh", "covidien mesh", "ethicon physiomesh", "physiomesh", "c-qur", "ventralight", "composix",
+            "mdl 2846", "mdl 2782", "mdl 3029"]
+  },
+  // "Baby food" alone is a recall or a nutrition story, so the name needs a metal or a litigation word.
+  "baby food": {
+    names: ["mdl 3101", "toxic baby food", "heavy metals baby food", "heavy metal baby food"],
+    loose: ["baby food", "gerber", "beech-nut", "beech nut", "plum organics", "happy baby", "earth's best"],
+    context: /\b(heavy metals?|lead|arsenic|cadmium|mercury|lawsuits?|sued|sues|suing|litigation|mdl|jccp|autism|adhd|neurodevelopment\w*|toxic|settle\w*|plaintiffs?|verdicts?|trial|jury)\b/i
+  },
+  // Ultra-processed food is a daily nutrition headline, so the name and the food companies need
+  // a litigation or addiction word before a story counts.
+  "ultra-processed food": {
+    names: ["martinez v kraft heinz", "processed food addiction", "food addiction lawsuit"],
+    loose: ["ultra-processed food", "ultraprocessed food", "processed food", "upf", "kraft heinz", "coca-cola", "coca cola",
+            "mondelez", "nestle", "general mills", "kellogg", "post holdings", "conagra", "pepsico"],
+    context: /\b(lawsuits?|sued|sues|suing|litigation|complaint|plaintiffs?|addict\w*|court|judge|dismiss\w*|settle\w*|verdicts?|trial|jury|tobacco playbook)\b/i
+  },
+  "camp lejeune": { names: ["camp lejeune justice act", "clja"] },
+  // Roblox also makes earnings and product news. Under the video game topic the name needs an
+  // addiction word; here it needs a suit, a state enforcer, or a child-safety word.
+  "roblox": {
+    loose: ["roblox"],
+    context: /\b(lawsuits?|sued|sues|suing|litigation|complaint|plaintiffs?|attorneys? general|predators?|grooming|exploitation|child safety|minors?|children|kids|settle\w*|trial|jury|verdicts?|mdl|jpml|subpoena\w*|investigat\w*)\b/i
+  },
   "social media addiction": {
     names: ["mdl 3047", "jccp 5255", "social media harm"],
     loose: ["social media", "instagram", "tiktok", "snapchat", "youtube", "meta"],
@@ -821,7 +855,7 @@ var TOPIC_RULES = {
   // Lawsuit Intelligencer's beats
   "ai chatbot": {
     names: ["character.ai", "ai companion"],
-    loose: ["ai chatbot", "chatbot", "chatgpt", "openai", "section 230"],
+    loose: ["ai chatbot", "chatbot", "chatgpt", "openai", "section 230", "grok", "xai"],
     context: /\b(deaths?|died|suicide|wrongful|teens?|overdose|minors?|harm|injur\w*|lawsuits?|sued|sues|suing)\b/i
   },
   // Litigation practice only: sanctions, hallucinated citations, AI in filings, briefs, depositions
@@ -896,6 +930,25 @@ var TOPIC_RULES = {
   "mass tort advertising": {
     names: ["legal advertising", "lawyer advertising", "attorney advertising", "lawsuit advertising",
             "claimant acquisition", "legal marketing"]
+  },
+  // Web-tracking privacy suits: CIPA, wiretap and session-replay claims against sites and AI tools.
+  "cipa": {
+    names: ["california invasion of privacy act", "wiretap lawsuit", "wiretapping lawsuit", "session replay",
+            "chat pixel", "meta pixel lawsuit", "trap and trace", "pen register"],
+    loose: ["wiretap", "wiretapping", "otter.ai", "otter ai"],
+    context: /\b(lawsuits?|sued|sues|suing|class action|settle\w*|ruling|dismiss\w*|certif\w*|privacy|complaint|plaintiffs?)\b/i
+  },
+  // "litigation funding" loses "litigation" to coreTerm, so the topic is named third-party litigation
+  // funding and its press names carry the rest.
+  "third-party funding": {
+    names: ["litigation funding", "litigation finance", "litigation funder", "litigation financier", "legal funding",
+            "tplf", "burford", "lawsuit funding", "pre-settlement funding"]
+  },
+  // Deepfake news is mostly politics and scams, so the name needs a civil-suit or statute word.
+  "deepfake": {
+    names: ["take it down act", "defiance act"],
+    loose: ["deepfake", "deep fake", "nonconsensual intimate", "non-consensual intimate", "nudify", "undress app"],
+    context: /\b(lawsuits?|sued|sues|suing|litigation|class action|settle\w*|complaint|plaintiffs?|attorneys? general|court|verdicts?|jury|damages|liabilit\w*)\b/i
   }
 };
 
@@ -959,11 +1012,12 @@ function topicsOf(item) {
 // AI topics belong to the AI Wire and Lawsuit Intelligencer's other beats to the INTELLIGENCER
 // tab. A topic's searches run in its tab, and a story that proves the topic shows there whichever
 // channel fetched it. A story covering both goes to the AI Wire. ALL shows every tab together.
-var AI_TOPIC_CORES = { "ai chatbot": 1, "ai in court": 1, "ai data center": 1 };
+var AI_TOPIC_CORES = { "ai chatbot": 1, "ai in court": 1, "ai data center": 1, "deepfake": 1 };
 var AI_WORDS = /\b(ai|a\.i\.|artificial intelligence|generative ai|chatgpt|chatbots?|openai|llms?)\b/i;
 var INTEL_TOPIC_CORES = {
   "nec baby formula": 1, "byheart": 1, "video game addiction": 1, "qui tam": 1,
-  "law firm mso": 1, "mass tort advertising": 1, "state attorney general": 1
+  "law firm mso": 1, "mass tort advertising": 1, "state attorney general": 1,
+  "cipa": 1, "third-party funding": 1
 };
 
 function isAiTopic(t) {
