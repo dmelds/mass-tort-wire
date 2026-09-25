@@ -280,10 +280,13 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 14;
+var SETTINGS_VERSION = 15;
 // The ways a headline says a price moved. One rule, since a blocked word can list choices
 // with a slash: "stock/share + jump/fall" hides "Bayer shares fall" and "Bayer stock jumps".
 var STOCK_MOVES = "jump/fall/fell/drop/dropped/rise/rose/slide/slid/surge/plunge/tumble/soar/rally/rallied/climb/sink/sank/slump/dip/dipped/gain/tank/rebound/dive/spike/slip/slipped/skid/skidded/mover/trading/ticker/upgrade/downgrade/valuation/investor/analyst";
+// The policy side of data center news. "data center + permit/zoning" hides the permit and
+// zoning fights and leaves "AI data center lawsuit" stories on the wire.
+var DATA_CENTER_POLICY = "permit/permitting/zoning/rezoning/regulation/regulate/regulator/regulatory/ordinance/moratorium/bill/legislation/legislature/lawmaker/tax break/tax incentive/tax credit/incentive/council/commissioner/planning board/planning commission/supervisor/site plan";
 var DEFAULTS = {
   version: SETTINGS_VERSION,
   topics: [
@@ -334,7 +337,12 @@ var DEFAULTS = {
                  "dividend", "market cap", "52-week", "premarket", "pre-market", "after-hours", "intraday",
                  "should you buy", "buy the dip", "stock to buy", "stock to watch", "stock to sell", "stock to avoid",
                  "top gainer", "top loser", "stock alert", "options activity", "short interest", "stock rating",
-                 "stock market", "stock exchange", "shareholder value"],
+                 "stock market", "stock exchange", "shareholder value",
+                 // Google News items carry a headline and no summary, so these bare words are
+                 // tested against the headline alone. "Bayer stock" is a price story every time.
+                 "stock", "ETF", "bullish", "bearish", "data center demand", "data center boom + stock/ETF/invest/investor/bet",
+                 // Data center siting: permits, zoning, ordinances, tax breaks. The lawsuits stay.
+                 "data center + " + DATA_CENTER_POLICY],
   newsFeeds: ["https://www.aboutlawsuits.com/feed/"],
   firmWatch: [
     "Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
@@ -374,7 +382,10 @@ var ADDED = {
   12: { topics: ["asbestos lawsuit", "paraquat lawsuit", "talc lawsuit", "Tylenol lawsuit", "transvaginal mesh lawsuit",
                  "social media addiction lawsuit", "House v. NCAA settlement"] },
   13: { blockedTerms: ["Tylenol murder", "Tylenol poisoning", "Tylenol killing", "Tylenol + cyanide"] },
-  14: { blockedTerms: DEFAULTS.blockedTerms.slice(DEFAULTS.blockedTerms.indexOf("stock/share + " + STOCK_MOVES)) }
+  14: { blockedTerms: DEFAULTS.blockedTerms.slice(DEFAULTS.blockedTerms.indexOf("stock/share + " + STOCK_MOVES),
+                                                  DEFAULTS.blockedTerms.indexOf("stock")) },
+  15: { blockedTerms: ["stock", "ETF", "bullish", "bearish", "data center demand", "data center boom + stock/ETF/invest/investor/bet",
+                       "data center + " + DATA_CENTER_POLICY] }
 };
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
