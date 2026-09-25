@@ -1111,7 +1111,16 @@ function callFeeds(entries, perFeed) {
   });
 }
 
-// Split into batches of 12 and merge, dropping duplicates across batches.
+// The same story under two headlines-worth of punctuation, or from two searches that each got
+// their own link to it, is one story.
+function storyKey(it) {
+  var norm = function (t) { return String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); };
+  return norm(it.title) + "|" + norm(it.source);
+}
+
+// Split into batches of 12 and merge, dropping duplicates across batches. The feeds function
+// drops a repeat within one batch; a story two searches return from different batches reaches
+// here twice, under two links, so the headline and publisher settle it and the topics merge.
 function runBatches(entries, perFeed) {
   if (!entries.length) return Promise.resolve({ items: [], feeds: [] });
   var batches = [];
@@ -1124,9 +1133,15 @@ function runBatches(entries, perFeed) {
       ok.forEach(function (r) {
         out.feeds = out.feeds.concat(r.value.feeds);
         r.value.items.forEach(function (it) {
-          var k = it.url;
-          if (seen[k]) return;
-          seen[k] = true;
+          var dup = seen[it.url] || seen["t:" + storyKey(it)];
+          if (dup) {
+            (it.matched || []).forEach(function (t) { if ((dup.matched || []).indexOf(t) === -1) (dup.matched = dup.matched || []).push(t); });
+            (it.watch || []).forEach(function (w) { if ((dup.watch || []).indexOf(w) === -1) (dup.watch = dup.watch || []).push(w); });
+            if (!dup.summary && it.summary) dup.summary = it.summary;
+            return;
+          }
+          seen[it.url] = it;
+          seen["t:" + storyKey(it)] = it;
           out.items.push(it);
         });
       });
@@ -1560,8 +1575,10 @@ function renderFeed() {
   // A story fetched by two channels shows once, in the channel chan() gives it.
   var seenUrl = {};
   var unique = items.filter(function (i) {
-    if (seenUrl[i.url]) return false;
+    var k = "t:" + storyKey(i);
+    if (seenUrl[i.url] || seenUrl[k]) return false;
     seenUrl[i.url] = true;
+    seenUrl[k] = true;
     return true;
   });
   var shown = unique.filter(function (i) { return !isBlocked(i); });
