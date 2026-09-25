@@ -1434,6 +1434,47 @@ function noteVersion(shown, dropped) {
   if (dropped.source && shown.moreSources.indexOf(dropped.source) === -1) shown.moreSources.push(dropped.source);
 }
 
+// Each channel's scan groups versions of a story by itself, and NEWS WIRE shows every channel
+// at once. The New Mexico v. Meta verdict reached NEWS WIRE four times that way: the news scan
+// kept the AP and Reuters copies, and the Intelligencer scan kept Engadget and KOAT. So the page
+// groups once more, across channels, with the same rules, on whatever list a tab is about to
+// show. The newest copy stands for the story; copies past MAX_VERSIONS are counted on it.
+// A newsletter headline that strings several stories together with commas ("Trump's voter data
+// push, law firms chase AI talent, ... Uplift closes 6th MSO deal") shares words with each
+// story it lists, so it never groups with anything.
+function isDigestTitle(t) {
+  return (String(t || "").match(/,/g) || []).length >= 2;
+}
+function foldVersions(list) {
+  var kept = [], out = [], extra = {};
+  sortItems(list).forEach(function (it) {
+    var tok = it._tok || (it._tok = titleTokens(it.title));
+    var cluster = null;
+    if (!isDigestTitle(it.title)) {
+      for (var j = 0; j < kept.length; j++) {
+        if (isDigestTitle(kept[j].item.title)) continue;
+        if (!relatedStory(tok, kept[j].tok)) continue;
+        if (!withinDay(it, kept[j].item) || !shareTopic(it, kept[j].item)) continue;
+        cluster = kept[j].cluster;
+        break;
+      }
+    }
+    if (cluster && cluster.shown >= MAX_VERSIONS) {
+      var e = extra[cluster.root.url] || (extra[cluster.root.url] = { n: 0, sources: [] });
+      e.n += 1 + (it.more || 0);
+      [it.source].concat(it.moreSources || []).forEach(function (s) {
+        if (s && e.sources.indexOf(s) === -1) e.sources.push(s);
+      });
+      return;
+    }
+    if (cluster) cluster.shown++;
+    else cluster = { root: it, shown: 1 };
+    kept.push({ tok: tok, item: it, cluster: cluster });
+    out.push(it);
+  });
+  return { list: out, extra: extra };
+}
+
 function mergeChannel(results, ch) {
   var ok = results.filter(function (r) { return r.status === "fulfilled"; });
   if (!ok.length) throw results[0].reason;
@@ -1721,12 +1762,15 @@ function renderFeed() {
 
   // Tab counts follow the search, so each tab shows how many of its stories match.
   CHANNEL_KEYS.forEach(function (tab) {
-    document.getElementById("ct-" + tab).textContent = hits.filter(function (i) { return inTab(i, tab); }).length;
+    document.getElementById("ct-" + tab).textContent =
+      foldVersions(hits.filter(function (i) { return inTab(i, tab); })).list.length;
   });
 
-  var visible = sortItems(hits.filter(function (i) { return inTab(i, filter); }));
+  var folded = foldVersions(hits.filter(function (i) { return inTab(i, filter); }));
+  var visible = folded.list;
   // New stories in this tab and search, counted before the NEW ONLY toggle narrows the list.
-  var newCount = base.filter(matches).filter(function (i) { return inTab(i, filter); }).filter(isNew).length;
+  var newCount = foldVersions(base.filter(matches).filter(function (i) { return inTab(i, filter); }))
+    .list.filter(isNew).length;
   var html = "";
 
   Object.keys(errors).forEach(function (ch) {
@@ -1778,11 +1822,15 @@ function renderFeed() {
     }).join("");
     var c = chan(item);
     var when = timeLabel(item);
+    var ex = folded.extra[item.url];
+    var more = (item.more || 0) + (ex ? ex.n : 0);
+    var moreSources = (item.moreSources || []).slice();
+    if (ex) ex.sources.forEach(function (s) { if (moreSources.indexOf(s) === -1) moreSources.push(s); });
     html += '<a class="item ' + esc(c) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
       + '<div class="src">' + CHANNELS[c] + ' \u00B7 ' + esc(item.source || "\u2014")
       + (when ? ' \u00B7 ' + esc(when) : '')
-      + (item.more ? ' \u00B7 <span class="more" title="' + esc((item.moreSources || []).join(", ")) + '">+'
-          + item.more + ' more version' + (item.more === 1 ? '' : 's') + '</span>' : '')
+      + (more ? ' \u00B7 <span class="more" title="' + esc(moreSources.join(", ")) + '">+'
+          + more + ' more version' + (more === 1 ? '' : 's') + '</span>' : '')
       + (isNew(item) ? '<span class="new">NEW</span>' : '') + '</div>'
       + '<div class="title">' + highlight(item.title, words) + '</div>'
       + (item.summary ? '<p class="sum">' + highlight(item.summary, words) + '</p>' : '')
