@@ -7,8 +7,18 @@
 // Stored with Netlify Blobs, which needs no API key and survives redeploys.
 
 import { getStore } from "@netlify/blobs";
+import { timingSafeEqual } from "node:crypto";
 
 const KEY = "settings";
+
+// Only the wire itself may read or write the saved setup. WIRE_KEY is set in the
+// Netlify UI, never in the repo; with it unset every request is refused.
+function keyOk(req) {
+  const want = process.env.WIRE_KEY || "";
+  const got = req.headers.get("x-wire-key") || "";
+  if (!want || got.length !== want.length) return false;
+  return timingSafeEqual(Buffer.from(got), Buffer.from(want));
+}
 const LISTS = [
   "topics", "outlets", "blockedSources", "trustedSources", "newsFeeds",
   "firmWatch", "firmFeeds", "aiSearches", "aiFeeds", "blockedTerms",
@@ -39,6 +49,10 @@ function reply(status, data) {
 export default async (req) => {
   // Strong consistency: a private window opened right after a change must see that change.
   const store = getStore({ name: "mass-tort-wire", consistency: "strong" });
+
+  if (!keyOk(req)) {
+    return reply(401, { error: process.env.WIRE_KEY ? "bad_key" : "WIRE_KEY not set in Netlify" });
+  }
 
   if (req.method === "GET") {
     const settings = await store.get(KEY, { type: "json" });

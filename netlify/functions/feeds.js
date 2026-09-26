@@ -289,13 +289,24 @@ function dedupeKey(url) {
   }
 }
 
+// Only the wire itself may use this fetcher. The page sends the key it was given
+// once per device; WIRE_KEY is set in the Netlify UI, never in the repo. With no
+// WIRE_KEY configured every request is refused, so a deploy that forgot the
+// variable fails loudly instead of running open.
+function keyOk(event) {
+  const want = process.env.WIRE_KEY || "";
+  const got = (event.headers && (event.headers["x-wire-key"] || event.headers["X-Wire-Key"])) || "";
+  if (!want || got.length !== want.length) return false;
+  return require("crypto").timingSafeEqual(Buffer.from(got), Buffer.from(want));
+}
+
 exports.handler = async (event) => {
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Content-Type": "application/json",
-  };
+  const headers = { "Content-Type": "application/json" };
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "POST only" }) };
+  }
+  if (!keyOk(event)) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: process.env.WIRE_KEY ? "bad_key" : "WIRE_KEY not set in Netlify" }) };
   }
 
   let urls, topics, days, perFeed, blockSources, trustSources;
