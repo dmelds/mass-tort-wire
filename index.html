@@ -843,7 +843,7 @@ var TOPIC_RULES = {
   "social media addiction": {
     names: ["mdl 3047", "jccp 5255", "social media harm"],
     loose: ["social media", "instagram", "tiktok", "snapchat", "youtube", "meta"],
-    context: /^(?=.*\b(addict\w*|mental health|teens?|youth|minors|children|kids|adolescents?|school districts?)\b)(?=.*\b(lawsuits?|sued|sues|suing|trials?|jury|jurors|verdicts?|bellwether|mdl|jccp|settle\w*|litigation)\b)/i
+    context: /^(?=.*\b(addict\w*|mental health|teens?|youth|minors|child\w*|kids|adolescents?|school districts?)\b)(?=.*\b(lawsuits?|sued|sues|suing|trials?|jury|jurors|verdicts?|bellwether|mdl|jccp|settle\w*|litigation)\b)/i
   },
   "house v. ncaa": {
     names: ["house v ncaa", "house settlement", "ncaa settlement", "college sports commission"],
@@ -915,7 +915,7 @@ var TOPIC_RULES = {
       "^(?!.*\\b(" + AG_FEDERAL + ")\\b)" +
       "(?=.*\\b(sues?|sued|suing|lawsuits?|complaint|subpoena\\w*|investigat\\w*|settle\\w*|" +
       "civil investigative demand|cease[- ]and[- ]desist|enforcement|trials?|jury|jurors|verdicts?|civil penalt\\w*)\\b)" +
-      "(?=.*\\b(consumers?|deceptive|deceiv\\w*|unfair|fraud\\w*|mislead\\w*|misled|safety|harm\\w*|children|kids|teens?|minors|" +
+      "(?=.*\\b(consumers?|deceptive|deceiv\\w*|unfair|fraud\\w*|mislead\\w*|misled|safety|harm\\w*|child\\w*|kids|teens?|minors|" +
       "health|cancer|pfas|chemicals?|pollut\\w*|contaminat\\w*|opioids?|drugs?|products?|addict\\w*|privacy|" +
       "chatbots?|ai|" + AG_COMPANIES + ")\\b)" +
       "(?=.*\\b(state|states|multistate|bipartisan|coalition|" + AG_STATES + ")\\b)",
@@ -925,7 +925,15 @@ var TOPIC_RULES = {
       "(?=.*\\b(" + AG_COMPANIES + ")\\b)" +
       "(?=.*\\b(" + AG_STATES + ")\\b)" +
       "(?=.*\\b(trials?|jury|jurors|verdicts?|sues?|sued|suing|lawsuits?|settle\\w*|civil penalt\\w*)\\b)" +
-      "(?=.*\\b(deceiv\\w*|deceptive|mislead\\w*|misled|unfair|privacy|children|kids|teens?|minors|addict\\w*|safety|harm\\w*)\\b)",
+      "(?=.*\\b(deceiv\\w*|deceptive|mislead\\w*|misled|unfair|privacy|child\\w*|kids|teens?|minors|addict\\w*|safety|harm\\w*)\\b)" +
+      // An AG office's own release names the enforcer and the company but often no state or harm word:
+      // "Attorney General Marshall Announces Historic Multi-Million-Dollar Settlement with TikTok".
+      // The federal exclusion above already rules out the U.S. attorney general, so an attorney general
+      // settling with or suing a tracked company is a state action on its own.
+      "|^(?!.*\\b(" + AG_FEDERAL + ")\\b)" +
+      "(?=.*\\battorneys? general\\b)" +
+      "(?=.*\\b(" + AG_COMPANIES + ")\\b)" +
+      "(?=.*\\b(settle\\w*|sues?|sued|suing|lawsuits?|civil penalt\\w*|verdicts?)\\b)",
       "i")
   },
   "mass tort advertising": {
