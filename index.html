@@ -245,6 +245,7 @@
 
   <div class="config-foot">
     <span class="hint" id="syncStatus"></span>
+    <button class="ghost" id="keyBtn">WIRE KEY</button>
     <button class="ghost" id="resetBtn">RESET TO DEFAULTS</button>
   </div>
 </div>
@@ -414,6 +415,23 @@ function load(key, fallback) {
 }
 function save(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
+}
+
+// ── Wire key ──
+// Both site functions refuse requests without the key set in Netlify as WIRE_KEY.
+// Entered once per device and kept in this browser; a private window asks again.
+var KEY_STORE = "mtw-key";
+var sessionKey = "";   // holds the key for this page when the browser refuses storage
+function wireKey() {
+  try { return localStorage.getItem(KEY_STORE) || sessionKey; } catch (e) { return sessionKey; }
+}
+function askWireKey(message) {
+  var k = window.prompt(message || "Enter the wire key (WIRE_KEY in Netlify).", "");
+  if (k === null) return "";
+  k = k.trim();
+  sessionKey = k;
+  try { localStorage.setItem(KEY_STORE, k); } catch (e) { /* private window: sessionKey carries it */ }
+  return k;
 }
 
 var settings;
@@ -654,6 +672,13 @@ document.getElementById("resetBtn").onclick = function () {
   if (!confirm("Reset topics and feeds to the defaults?")) return;
   applySettings({ version: SETTINGS_VERSION });
   persist(); fillInputs(); renderFeed();
+};
+
+document.getElementById("keyBtn").onclick = function () {
+  if (!askWireKey("Enter the wire key for this device.")) return;
+  lastSynced = "";
+  setSync("Key saved on this device.");
+  pushSettings();
 };
 
 // ── Filters ──
@@ -1147,7 +1172,29 @@ function fetchT(url, opts, ms) {
   var timer = setTimeout(function () { ctrl.abort(); }, ms || 15000);
   opts = opts || {};
   opts.signal = ctrl.signal;
-  return fetch(url, opts).finally(function () { clearTimeout(timer); });
+  var isSite = url.indexOf("/.netlify/functions/") === 0;
+  var usedKey = "";
+  if (isSite) {
+    opts.headers = opts.headers || {};
+    usedKey = wireKey();
+    opts.headers["X-Wire-Key"] = usedKey;
+  }
+  var p = fetch(url, opts);
+  if (isSite) {
+    // Wrong or missing key: ask once and retry the same request, then give up on it.
+    // Parallel feed calls that failed together reuse the key the first prompt collected.
+    p = p.then(function (res) {
+      if (res.status !== 401) return res;
+      var k = wireKey();
+      if (!k || k === usedKey) {
+        k = askWireKey(usedKey ? "That key was refused. Enter the wire key again." : "Enter the wire key (WIRE_KEY in Netlify).");
+      }
+      if (!k) return res;
+      opts.headers["X-Wire-Key"] = k;
+      return fetch(url, opts);
+    });
+  }
+  return p.finally(function () { clearTimeout(timer); });
 }
 
 function callFeeds(entries, perFeed) {

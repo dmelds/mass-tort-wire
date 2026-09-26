@@ -1,0 +1,13 @@
+# Security headers for every path. Netlify already sends
+# Strict-Transport-Security at the edge, so it is not repeated here.
+# SAMEORIGIN is safe for the home-screen app: it runs as its own window,
+# not inside a frame.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# Function replies are per-device and must never be served from a cache.
+/.netlify/functions/*
+  Cache-Control: no-store
