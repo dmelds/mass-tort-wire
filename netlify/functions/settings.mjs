@@ -36,6 +36,8 @@ function clean(body) {
   const days = Number(body.windowDays);
   if (days === 7 || days === 30) out.windowDays = days;
   if (typeof body.topicsOnly === "boolean") out.topicsOnly = body.topicsOnly;
+  // A firm build's name for the eyebrow and the home-screen title. Plain text, short.
+  if (typeof body.firmName === "string") out.firmName = body.firmName.trim().slice(0, 80);
   return Object.keys(out).length ? out : null;
 }
 
