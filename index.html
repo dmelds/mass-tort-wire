@@ -441,6 +441,50 @@ if (FIRM_BUILD) {
 }
 if (FIRM_BUILD) document.getElementById("tagline").textContent = "Mass tort news, the firms you watch, and AI in the courts.";
 
+// ── Usage (firm build only) ──
+// One GA4 property counts use across every firm site; the hostname tells the firms apart.
+// It records opens, scans, story clicks and preset choices. Your own wire loads no tag.
+var GA_ID = "G-C5MWZ4D858";
+function track(name, params) {
+  if (typeof window.gtag !== "function") return;
+  try { window.gtag("event", name, params || {}); } catch (e) { /* never let analytics break the wire */ }
+}
+// Your own devices: open any firm wire once with ?me=1 and that browser is marked internal
+// from then on, whatever its IP, so the GA4 Internal Traffic filter drops it. ?me=0 undoes it.
+var INTERNAL_KEY = "mtw-internal";
+(function () {
+  var m = /[?&]me=([01])\b/.exec(location.search);
+  if (!m) return;
+  try { if (m[1] === "1") localStorage.setItem(INTERNAL_KEY, "1"); else localStorage.removeItem(INTERNAL_KEY); } catch (e) { /* private window */ }
+  try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* keep the URL */ }
+})();
+function isInternal() { try { return localStorage.getItem(INTERNAL_KEY) === "1"; } catch (e) { return false; } }
+if (FIRM_BUILD) {
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { window.dataLayer.push(arguments); };
+  window.gtag("js", new Date());
+  window.gtag("config", GA_ID, isInternal() ? { traffic_type: "internal" } : {});
+  var gaTag = document.createElement("script");
+  gaTag.async = true;
+  gaTag.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID;
+  document.head.appendChild(gaTag);
+}
+
+// Links to the network's own sites carry the wire's origin, so a firm's click reaches the
+// site's own analytics as a referral from that firm's wire. Every other link stays blank.
+var OWN_SITE = /(^|\.)(lawsuitinformer\.com|lawsuitintelligencer\.com|lawsuit\.center|davidmeldofsky\.com)$/i;
+function hostOfUrl(u) { try { return new URL(u).hostname; } catch (e) { return ""; } }
+function storyHref(u) {
+  if (!OWN_SITE.test(hostOfUrl(u))) return u;
+  try {
+    var url = new URL(u);
+    url.searchParams.set("utm_source", "masstortwire");
+    url.searchParams.set("utm_medium", "referral");
+    url.searchParams.set("utm_campaign", location.hostname);
+    return url.toString();
+  } catch (e) { return u; }
+}
+
 // ── Firm build: DEAL WIRE tab and presets ──
 // On a firm build the middle tab is DEAL WIRE: the topics of a law firm M&A desk (MSOs, private
 // equity, ABS, fee-sharing rules, mergers, valuation, funding, and the docket events that price an
@@ -707,6 +751,7 @@ document.getElementById("presetSel").addEventListener("change", function () {
   this.value = "";
   if (!preset) return;
   if (settings.topics.length && !confirm("Replace the tracked topics and the firms to watch with this preset?")) return;
+  track("preset_chosen", { preset: Object.keys(PRESETS).filter(function (k) { return PRESETS[k] === preset; })[0] || "" });
   settings.topics = preset.topics.slice();
   settings.firmWatch = preset.firms.slice();
   persist(); fillInputs(); renderFeed(); runScan();
@@ -1801,10 +1846,18 @@ function runScan() {
     scanning = false;
     btn.disabled = false;
     btn.textContent = "RUN SCAN";
+    track("wire_scan", { topics: settings.topics.length, firms: settings.firmWatch.length });
   });
 }
 
 document.getElementById("scanBtn").onclick = runScan;
+
+document.getElementById("feed").addEventListener("click", function (e) {
+  var a = e.target.closest && e.target.closest("a.item");
+  if (!a) return;
+  var host = hostOfUrl(a.href);
+  track("story_click", { link_host: host, own_site: OWN_SITE.test(host) ? "yes" : "no", tab: a.dataset.tab || "" });
+});
 
 // ── Render ──
 function esc(s) {
@@ -2052,7 +2105,8 @@ function renderFeed() {
     var more = (item.more || 0) + (ex ? ex.n : 0);
     var moreSources = (item.moreSources || []).slice();
     if (ex) ex.sources.forEach(function (s) { if (moreSources.indexOf(s) === -1) moreSources.push(s); });
-    html += '<a class="item ' + esc(c) + '" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">'
+    var own = OWN_SITE.test(hostOfUrl(item.url));
+    html += '<a class="item ' + esc(c) + '" href="' + esc(storyHref(item.url)) + '" target="_blank" rel="' + (own ? "noopener" : "noopener noreferrer") + '" data-tab="' + esc(c) + '">'
       + '<div class="src">' + CHANNELS[c] + ' \u00B7 ' + esc(item.source || "\u2014")
       + (when ? ' \u00B7 ' + esc(when) : '')
       + (more ? ' \u00B7 <span class="more" title="' + esc(moreSources.join(", ")) + '">+'
