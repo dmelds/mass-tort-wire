@@ -40,6 +40,8 @@
   .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); margin-bottom: 4px; }
   h1 { font-family: 'Spectral', Georgia, serif; font-size: 30px; font-weight: 700; line-height: 1.1; }
   .tagline { color: var(--dim); font-size: 14px; margin-top: 4px; }
+  .byline { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); margin-top: 10px; }
+  .byline a, footer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
   .controls { border-bottom: 1px solid var(--rule); padding: 12px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   button, select { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -177,9 +179,10 @@
 <body>
 
 <header>
-  <div class="eyebrow">SIGNALS DESK &middot; <span id="today"></span></div>
+  <div class="eyebrow"><span id="firmMark"></span>SIGNALS DESK &middot; <span id="today"></span></div>
   <h1>Mass Tort Wire</h1>
-  <p class="tagline">Mass tort news, plaintiff-firm posts, Intelligencer beats and AI in the courts.</p>
+  <p class="tagline" id="tagline">Mass tort news, plaintiff-firm posts, Intelligencer beats and AI in the courts.</p>
+  <p class="byline">BY <a href="https://lawsuitintelligencer.com/?utm_source=masstortwire&amp;utm_medium=referral&amp;utm_campaign=byline" target="_blank" rel="noopener">LAWSUIT INTELLIGENCER</a> &middot; DAVID MELDOFSKY</p>
 </header>
 
 <div class="controls">
@@ -197,6 +200,19 @@
   <div id="healthBox"><p class="hint">Run a scan to see which sources respond.</p></div>
 
   <div class="group">WHAT TO TRACK</div>
+  <div id="firmNameBlock" hidden>
+    <div class="label">YOUR FIRM</div>
+    <input type="text" id="firmNameInput" placeholder="Firm name as it should read at the top of the wire" maxlength="80">
+    <p class="hint">Shown above the wire and as the home-screen name on every device that opens this site.</p>
+    <div class="label">START FROM A PRESET</div>
+    <select id="presetSel">
+      <option value="">Choose a desk…</option>
+      <option value="litigation">Litigation desk: the mass torts a plaintiff firm signs</option>
+      <option value="buyer">Deal desk, buyer: the inventories and the platforms doing deals</option>
+      <option value="seller">Deal desk, seller: the buyers, the comparables and the rules</option>
+    </select>
+    <p class="hint">Replaces the tracked topics and the firms to watch with the preset, then scans. Add your own on top.</p>
+  </div>
   <div class="label">TRACKED TOPICS</div>
   <div class="chips" id="topicChips"></div>
   <div class="row">
@@ -276,6 +292,7 @@
 <main id="feed"></main>
 
 <footer>
+  MASS TORT WIRE IS BUILT AND MAINTAINED BY DAVID MELDOFSKY, PUBLISHER OF <a href="https://lawsuitintelligencer.com/?utm_source=masstortwire&amp;utm_medium=referral&amp;utm_campaign=footer" target="_blank" rel="noopener">LAWSUIT INTELLIGENCER</a> AND <a href="https://lawsuitinformer.com/?utm_source=masstortwire&amp;utm_medium=referral&amp;utm_campaign=footer" target="_blank" rel="noopener">LAWSUIT INFORMER</a>.<br>
   NEWS WIRE: EVERY STORY ON THE WIRE, GROUPED BY DAY &middot; NEW: REACHED THIS DEVICE IN THE LAST 24 HOURS &middot; INTELLIGENCER: STORIES ON LAWSUIT INTELLIGENCER'S BEATS &middot; AI WIRE: AI TOPICS, AI-IN-LAW SEARCHES AND LEGAL TECH FEEDS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
@@ -283,6 +300,12 @@
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
 var SETTINGS_VERSION = 16;
+// FIRM BUILD. false on main, true on the `firm` branch, and that one line is the only
+// difference between the two. A firm build starts with no topics, no firm watch and no
+// AI searches, never receives this wire's topic additions on a version bump, and keeps
+// the firm's own AI searches across bumps. The blocked lists, the trusted sources and
+// TOPIC_RULES are shared, since they are filter hygiene rather than a topic list.
+var FIRM_BUILD = false;
 // The ways a headline says a price moved. One rule, since a blocked word can list choices
 // with a slash: "stock/share + jump/fall" hides "Bayer shares fall" and "Bayer stock jumps".
 var STOCK_MOVES = "jump/fall/fell/drop/dropped/rise/rose/slide/slid/surge/plunge/tumble/soar/rally/rallied/climb/sink/sank/slump/dip/dipped/gain/tank/rebound/dive/spike/slip/slipped/skid/skidded/mover/trading/ticker/upgrade/downgrade/valuation/investor/analyst";
@@ -377,7 +400,8 @@ var DEFAULTS = {
     "https://www.artificiallawyer.com/feed/"
   ],
   windowDays: 7,
-  topicsOnly: false
+  topicsOnly: false,
+  firmName: ""
 };
 // Entries added to the defaults in a given version. Settings saved before that version get them
 // once, and an entry you later remove stays removed.
@@ -398,13 +422,98 @@ var ADDED = {
   16: { topics: ["hernia mesh lawsuit", "baby food lawsuit", "ultra-processed food lawsuit", "Camp Lejeune lawsuit",
                  "Roblox lawsuit", "CIPA lawsuit", "third-party litigation funding", "deepfake lawsuit"] }
 };
+// A firm build ships none of this wire's topic list. The firm enters its own litigations and
+// the firms it watches under EDIT SOURCES, and those live in that site's own settings store.
+// Lawsuit Informer and Lawsuit Intelligencer are trusted, so their stories pass the topic
+// check and their feeds are on the News Wire list from the first open.
+var FIRM_LISTS = ["topics", "firmWatch", "firmFeeds", "aiSearches"];
+if (FIRM_BUILD) {
+  FIRM_LISTS.forEach(function (k) { DEFAULTS[k] = []; });
+  DEFAULTS.trustedSources = DEFAULTS.trustedSources.concat([
+    "Lawsuit Informer", "lawsuitinformer.com", "Lawsuit Intelligencer", "lawsuitintelligencer.com"
+  ]);
+  DEFAULTS.newsFeeds = DEFAULTS.newsFeeds.concat([
+    "https://lawsuitinformer.com/feed.xml", "https://lawsuitintelligencer.com/feed.xml"
+  ]);
+  Object.keys(ADDED).forEach(function (v) {
+    FIRM_LISTS.forEach(function (k) { delete ADDED[v][k]; });
+  });
+}
+if (FIRM_BUILD) document.getElementById("tagline").textContent = "Mass tort news, the firms you watch, and AI in the courts.";
+
+// ── Firm build: DEAL WIRE tab and presets ──
+// On a firm build the middle tab is DEAL WIRE: the topics of a law firm M&A desk (MSOs, private
+// equity, ABS, fee-sharing rules, mergers, valuation, funding, and the docket events that price an
+// inventory). It hides itself when the firm tracks none of them. Keys are coreTerm() of the name.
+var DEAL_TOPIC_CORES = {
+  "law firm mso": 1, "law firm private equity": 1, "alternative business structure": 1, "rule 5.4": 1,
+  "law firm merger": 1, "third-party funding": 1, "global resolution": 1, "bellwether trial": 1,
+  "daubert ruling": 1, "census": 1, "mass tort advertising": 1, "law firm valuation": 1,
+  "arizona abs": 1, "california ab 2305": 1, "colorado fee-sharing ban": 1, "illinois hb 5487": 1,
+  "law firm succession": 1
+};
+// Sponsors and platforms named in 2026 deal coverage, and the firms that took investment.
+var DEAL_FIRMS = [
+  "Uplift Investors", "Orion Legal", "Trive Capital", "Charlesbank", "Morgan & Morgan",
+  "Massumi & Consoli", "Dudley DeBosier", "Hughes & Coleman", "John Foy & Associates",
+  "Wood Smith Henning & Berman", "Cohen & Gresser", "McDermott Will & Schulte"
+];
+var DEAL_TOPICS_SHARED = [
+  "law firm MSO = management services organization, legal MSO",
+  "law firm private equity = private equity law firm, outside investment law firm",
+  "alternative business structure = ABS law firm, nonlawyer ownership, non-lawyer ownership",
+  "Rule 5.4 = fee sharing, fee-sharing",
+  "law firm merger = law firm acquisition, law firm combination",
+  "third-party litigation funding = litigation finance, litigation funder, portfolio financing"
+];
+var PRESETS = {
+  litigation: {
+    topics: [
+      "AFFF lawsuit = firefighting foam", "PFAS litigation = forever chemicals", "Roundup settlement = glyphosate",
+      "talc lawsuit = talcum powder, baby powder", "hair relaxer lawsuit", "Depo-Provera lawsuit = meningioma",
+      "GLP-1 lawsuit = Ozempic, Wegovy, Mounjaro", "paraquat lawsuit = Gramoxone", "hernia mesh lawsuit",
+      "Camp Lejeune lawsuit", "social media addiction lawsuit", "Tylenol lawsuit = acetaminophen autism",
+      "asbestos lawsuit = mesothelioma", "NEC baby formula lawsuit = necrotizing enterocolitis",
+      "Suboxone lawsuit = tooth decay", "Uber sexual assault lawsuit", "Bard PowerPort lawsuit = port catheter",
+      "Oxbryta lawsuit", "video game addiction lawsuit", "mass tort"
+    ],
+    firms: ["Motley Rice", "Weitz & Luxenberg", "Keller Postman", "Morgan & Morgan", "Beasley Allen",
+            "Lieff Cabraser", "Seeger Weiss", "Levin Papantonio", "Sokolove Law", "Gori Law"]
+  },
+  buyer: {
+    topics: DEAL_TOPICS_SHARED.concat([
+      "global resolution = global settlement, settlement grid, settlement program, claims administrator",
+      "bellwether trial = bellwether verdict, bellwether ruling",
+      "Daubert ruling = Rule 702, expert exclusion, general causation",
+      "MDL census = plaintiff fact sheet, docket census",
+      "mass tort advertising = legal advertising spend, claimant acquisition",
+      "law firm valuation = law firm EBITDA, law firm multiple"
+    ]),
+    firms: DEAL_FIRMS
+  },
+  seller: {
+    topics: DEAL_TOPICS_SHARED.concat([
+      "Arizona ABS = Arizona alternative business structure",
+      "California AB 2305 = fee-sharing prohibition, nonlawyer control",
+      "Colorado fee-sharing ban = Legal Practice Integrity and Fee-sharing Prohibition Act",
+      "Illinois HB 5487",
+      "law firm valuation = law firm EBITDA, law firm multiple",
+      "law firm succession = founder exit, partner buyout"
+    ]),
+    firms: DEAL_FIRMS
+  }
+};
 var MAX_TOPIC_SEARCHES = 20;
 var STORE_KEY = "mtw:settings:v2";
 var SEEN_KEY = "mtw:seen:v3";      // url -> when this device first saw it (ms)
 var SEEN_KEY_V2 = "mtw:seen:v2";   // older list of seen urls, read once and retired
 var NEW_HOURS = 24;                // NEW: first arrived on this device within this many hours
 var BATCH = 12;               // feeds function limit per call
-var CHANNELS = { news: "NEWS WIRE", intel: "INTELLIGENCER", ai: "AI WIRE" };
+var CHANNELS = { news: "NEWS WIRE", intel: FIRM_BUILD ? "DEAL WIRE" : "INTELLIGENCER", ai: "AI WIRE" };
+if (FIRM_BUILD) {
+  document.querySelector('.filters button[data-f="intel"]').firstChild.textContent = "DEAL WIRE (";
+  document.querySelector('.channel-status .intel').firstChild.textContent = "DEALS ";
+}
 var CHANNEL_KEYS = ["news", "intel", "ai"];
 var OUTLET_NAMES = { "reuters.com": "Reuters", "law360.com": "Law360", "yahoo.com": "Yahoo News" };
 
@@ -445,7 +554,8 @@ function applySettings(stored) {
   // the AI searches and blocked sources it saved that day and never sees corrected ones.
   // A version bump reapplies the sources this app maintains, and leaves your own lists alone.
   if ((stored.version || 0) < SETTINGS_VERSION) {
-    settings.aiSearches = DEFAULTS.aiSearches.slice();
+    // The AI searches are this wire's own beat, so a firm build keeps the firm's lines instead.
+    if (!FIRM_BUILD) settings.aiSearches = DEFAULTS.aiSearches.slice();
     settings.aiFeeds = DEFAULTS.aiFeeds.slice();
     DEFAULTS.blockedSources.forEach(function (b) {
       if (settings.blockedSources.indexOf(b) === -1) settings.blockedSources.push(b);
@@ -480,12 +590,27 @@ if (!firstSeen || typeof firstSeen !== "object" || Array.isArray(firstSeen)) {
   save(SEEN_KEY, firstSeen);
 }
 
+// A story is stamped by URL and date together, so a page restamped with a new date (an update
+// page revised today) counts as a new arrival and earns NEW again, while the same story seen
+// on the same date stays quiet.
+function seenKey(i) { return i.url + (i.date ? "#" + i.date : ""); }
+
 // Record arrivals, then drop entries older than the wire's longest window. A story older than
 // 30 days can't come back through a 30-day search, so nothing needed stays forgotten.
 function noteSeen(list) {
   var now = Date.now(), changed = false;
   list.forEach(function (i) {
-    if (i.url && firstSeen[i.url] === undefined) { firstSeen[i.url] = now; changed = true; }
+    if (!i.url) return;
+    var k = seenKey(i);
+    if (firstSeen[k] !== undefined) return;
+    // Stamps written before the date joined the key are bare URLs. A story dated before this
+    // device first saw it inherits that stamp and stays quiet; a page revised since then is new.
+    var old = firstSeen[i.url], stamp = now;
+    if (old !== undefined) {
+      var d = Date.parse(i.time || i.date);
+      if (isNaN(d) || d <= old) stamp = old;
+    }
+    firstSeen[k] = stamp; changed = true;
   });
   if (!changed) return;
   var keys = Object.keys(firstSeen);
@@ -557,6 +682,36 @@ function persist() {
 // ── Settings UI ──
 document.getElementById("today").textContent = localDay(new Date());
 
+// The firm's name leads the eyebrow, the tab title and the home-screen name. Empty on
+// this wire and on a firm build that has not entered one yet.
+function applyFirmName() {
+  var name = (settings.firmName || "").trim();
+  document.getElementById("firmMark").textContent = name ? name.toUpperCase() + " \u00B7 " : "";
+  document.title = name ? name + " \u00B7 Mass Tort Wire" : "Mass Tort Wire | Signals Desk";
+  var meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if (meta) meta.setAttribute("content", name ? name + " Wire" : "Wire");
+}
+document.getElementById("firmNameBlock").hidden = !FIRM_BUILD;
+if (FIRM_BUILD) {
+  var fx = document.querySelector("footer");
+  fx.innerHTML = fx.innerHTML
+    .replace("INTELLIGENCER: STORIES ON LAWSUIT INTELLIGENCER'S BEATS", "DEAL WIRE: LAW FIRM M&amp;A, MSO AND FUNDING TOPICS, SHOWN WHEN YOU TRACK ONE");
+  var hx = document.querySelector("#topicChips + .row + .hint");
+  if (hx) hx.innerHTML = hx.innerHTML.replace("AI topics show in the AI Wire and Intelligencer topics in INTELLIGENCER.", "AI topics show in the AI Wire and deal topics in DEAL WIRE.");
+}
+document.getElementById("firmNameInput").addEventListener("change", function () {
+  settings.firmName = this.value.trim().slice(0, 80); persist(); applyFirmName();
+});
+document.getElementById("presetSel").addEventListener("change", function () {
+  var preset = PRESETS[this.value];
+  this.value = "";
+  if (!preset) return;
+  if (settings.topics.length && !confirm("Replace the tracked topics and the firms to watch with this preset?")) return;
+  settings.topics = preset.topics.slice();
+  settings.firmWatch = preset.firms.slice();
+  persist(); fillInputs(); renderFeed(); runScan();
+});
+
 function linesOf(id) {
   return document.getElementById(id).value
     .split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
@@ -578,6 +733,8 @@ function fillInputs() {
   document.getElementById("firmFeedsInput").value = settings.firmFeeds.join("\n");
   document.getElementById("aiSearchInput").value = settings.aiSearches.join("\n");
   document.getElementById("aiFeedsInput").value = settings.aiFeeds.join("\n");
+  document.getElementById("firmNameInput").value = settings.firmName || "";
+  applyFirmName();
   document.getElementById("windowSel").value = String(settings.windowDays);
   var tb = document.getElementById("topicsOnlyBtn");
   tb.classList.toggle("on", settings.topicsOnly);
@@ -586,6 +743,7 @@ function fillInputs() {
 }
 
 function renderChips() {
+  syncMiddleTab();
   var el = document.getElementById("topicChips");
   el.innerHTML = "";
   settings.topics.forEach(function (t) {
@@ -1059,9 +1217,19 @@ function isAiTopic(t) {
 }
 
 // "ai", "intel", or "" for a topic that belongs under ALL.
+var MIDDLE_TAB_CORES = FIRM_BUILD ? DEAL_TOPIC_CORES : INTEL_TOPIC_CORES;
 function topicTab(t) {
   if (isAiTopic(t)) return "ai";
-  return INTEL_TOPIC_CORES[coreTerm(t).toLowerCase()] ? "intel" : "";
+  return MIDDLE_TAB_CORES[coreTerm(t).toLowerCase()] ? "intel" : "";
+}
+
+// The DEAL WIRE tab shows only when a firm tracks a deal topic. Your own wire always shows its tabs.
+function syncMiddleTab() {
+  if (!FIRM_BUILD) return;
+  var btn = document.querySelector('.filters button[data-f="intel"]');
+  var show = settings.topics.some(function (t) { return topicTab(t) === "intel"; });
+  btn.hidden = !show;
+  if (!show && filter === "intel") document.querySelector('.filters button[data-f="news"]').click();
 }
 
 function chan(item) {
@@ -1646,7 +1814,7 @@ function esc(s) {
 }
 
 function isNew(item) {
-  var t = firstSeen[item.url];
+  var t = firstSeen[seenKey(item)];
   return t !== undefined && t >= Date.now() - NEW_HOURS * 3600000;
 }
 
@@ -1853,7 +2021,10 @@ function renderFeed() {
 
   if (scanned && searching) html += searchNote(visible.length);
 
-  if (!scanned) {
+  if (!scanned && FIRM_BUILD && !settings.topics.length) {
+    html += '<div class="empty-state"><p class="display">Your wire starts empty.</p>' +
+      '<p>Under EDIT SOURCES, enter your firm name, add the litigations you sign as tracked topics, and put your firm and the firms you watch under FIRMS TO WATCH. Then press RUN SCAN.</p></div>';
+  } else if (!scanned) {
     html += '<div class="empty-state"><p class="display">The wire is quiet.</p><p>Run a scan to pull the latest news and firm posts.</p></div>';
   } else if (!visible.length && !scanning && !searching) {
     html += '<div class="notice">' + (newOnly ? "NOTHING NEW IN THE LAST 24 HOURS IN THIS TAB."
@@ -1916,6 +2087,14 @@ pullSettings().then(function (remote) {
     setSync("Couldn't reach the site, so this window is using the settings saved in it.", true);
   }
   fillInputs();
+  if (FIRM_BUILD && !settings.topics.length) {
+    // A firm's first open: nothing to scan yet, so open the setup instead.
+    var cfg = document.getElementById("config");
+    cfg.classList.add("open");
+    document.getElementById("configBtn").textContent = "HIDE SOURCES";
+    renderFeed();
+    return;
+  }
   runScan();
 });
 </script>
