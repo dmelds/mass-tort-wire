@@ -1822,10 +1822,6 @@ function withinDay(x, y) {
   if (!x.date || !y.date) return false;
   return Math.abs(new Date(x.date) - new Date(y.date)) <= versionSpan(x, y) * 86400000;
 }
-// Two copies share a topic when they prove the same tracked topic, or when the same search
-// found both: an AI search line, a firm name, a one-off search. The AI Wire on a firm copy has
-// no tracked AI topics, so without the search tags every rewrite of "OpenAI halts training"
-// stood on its own.
 // On the AI Wire every story is about AI, and one event answers several search lines (Bill
 // Gates on a kill switch answers the kill switch line and the AI safety line), so the headline
 // words decide, with one guard: two headlines that each name a company and share none are two
@@ -1843,7 +1839,10 @@ function shareTopic(x, y) {
     if (!ox.length || !oy.length) return true;
     return ox.some(function (o) { return oy.indexOf(o) !== -1; });
   }
-  var a = tagsOf(x), b = tagsOf(y);
+  // Elsewhere two copies have to prove the same tracked topic. Sharing a search is not enough:
+  // every state AG suit answers the attorney general search and reads "attorney general sues",
+  // so on the search tag alone the Intelligencer tab folded different suits into one story.
+  var a = topicsOf(x), b = topicsOf(y);
   for (var i = 0; i < a.length; i++) if (b.indexOf(a[i]) !== -1) return true;
   return false;
 }
