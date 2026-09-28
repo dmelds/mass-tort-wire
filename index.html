@@ -2058,15 +2058,14 @@ function fromTrusted(item) {
   var src = ((item.source || "") + " " + (item.host || "") + " " + (item.sourceUrl || "")).toLowerCase();
   return (settings.trustedSources || []).some(function (t) { return t && src.indexOf(t.toLowerCase()) !== -1; });
 }
-// An AI search line is a Google News search, and a loose one returns AI business and market news.
-// A story that reached the AI Wire only through an AI search stays when its headline or summary
-// is about law or legal work, or when it proves one of your topics. A trusted source gets no pass
-// here: Reuters runs plenty of AI business news. Stories from the AI feeds are never checked.
-var AI_LEGAL = /\b(law|laws|legal|lawyers?|attorneys?|law\s*firms?|courts?|judges?|judicial|judiciary|jur(y|ors?)|trials?|lawsuits?|su(ed|es|ing)|litigat\w*|plaintiffs?|defendants?|settle(d|s|ment|ments)?|class\s+actions?|claims?|claimants?|verdicts?|rulings?|ruled|sanction(s|ed)?|hallucinat\w*|citations?|filings?|briefs?|depositions?|evidence|discovery|e-?discovery|mdl|regulators?|attorney\s+general|ftc|bar\s+association|paralegals?|legal\s*tech|legaltech)\b/i;
+// The AI Wire holds AI news about law. An AI search line is a Google News search, and a loose one
+// returns AI business and market news. The legal-tech feeds also run general AI commentary and
+// fiction. A story on the AI Wire stays when its headline or summary is about law or legal work,
+// or when it proves one of your topics. A trusted source gets no pass here: Reuters runs plenty
+// of AI business news.
+var AI_LEGAL = /\b(law|laws|legal|lawyers?|attorneys?|law\s*firms?|courts?|judges?|judicial|judiciary|jur(y|ors?)|trials?|lawsuits?|su(ed|es|ing)|litigat\w*|plaintiffs?|defendants?|settle(d|s|ment|ments)?|class\s+actions?|claims?|claimants?|verdicts?|rulings?|ruled|sanction(s|ed)?|hallucinat\w*|citations?|filings?|briefs?|depositions?|evidence|discovery|e-?discovery|mdl|regulators?|attorney\s+general|ftc|bar\s+association|paralegals?|legal\s*tech|legaltech|patents?|intellectual\s+property)\b/i;
 function aiStoryOk(item) {
   if (item.channel !== "ai") return true;
-  var fromSearch = (item.matched || []).some(function (m) { return settings.aiSearches.indexOf(m) !== -1; });
-  if (!fromSearch) return true;
   if (topicsOf(item).length) return true;
   return AI_LEGAL.test(itemText(item));
 }
