@@ -178,6 +178,25 @@
   .item .tag.firm { color: var(--firms); border-color: var(--firms); }
 
   footer { border-top: 1px solid var(--rule); padding: 16px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); line-height: 1.6; }
+
+  /* Phones: the masthead and controls took the whole first screen. Shorter masthead, no tagline,
+     and the view toggles on one scrolling row, so stories start in the upper half. */
+  @media (max-width: 600px) {
+    header { padding: calc(14px + env(safe-area-inset-top)) 16px 10px; }
+    .eyebrow { font-size: 10px; letter-spacing: 0.1em; }
+    h1 { font-size: 24px; }
+    .tagline { display: none; }
+    .byline { font-size: 10px; letter-spacing: 0.08em; margin-top: 6px; }
+    .controls { padding: 10px 16px; }
+    .filters { padding: 8px 12px 6px; }
+    .filters button { min-height: 40px; padding: 10px 8px; }
+    .toggles { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 16px 0; }
+    .toggles::-webkit-scrollbar { display: none; }
+    .toggles .ghost { flex-shrink: 0; white-space: nowrap; letter-spacing: 0.08em; padding: 8px 10px; }
+    .topicbar { padding: 8px 16px; }
+    main { padding: 8px 16px 40px; }
+    .day { padding-top: 14px; }
+  }
 </style>
 </head>
 <body>
@@ -650,6 +669,11 @@ if (!firstSeen || typeof firstSeen !== "object" || Array.isArray(firstSeen)) {
   save(SEEN_KEY, firstSeen);
 }
 
+// A device with no stamps at all (a first open) would otherwise stamp every story "now" and flag
+// the whole wire NEW. Its first scan stamps each story with its publish time instead, so NEW
+// means published in the last 24 hours. Later scans stamp arrivals as usual.
+var freshDevice = !Object.keys(firstSeen).length;
+
 // A story is stamped by URL and date together, so a page restamped with a new date (an update
 // page revised today) counts as a new arrival and earns NEW again, while the same story seen
 // on the same date stays quiet.
@@ -666,7 +690,10 @@ function noteSeen(list) {
     // Stamps written before the date joined the key are bare URLs. A story dated before this
     // device first saw it inherits that stamp and stays quiet; a page revised since then is new.
     var old = firstSeen[i.url], stamp = now;
-    if (old !== undefined) {
+    if (freshDevice) {
+      var pub = Date.parse(i.time || i.date);
+      stamp = isNaN(pub) ? now - 31 * 86400000 : Math.min(pub, now);
+    } else if (old !== undefined) {
       var d = Date.parse(i.time || i.date);
       if (isNaN(d) || d <= old) stamp = old;
     }
@@ -1921,6 +1948,7 @@ function runScan() {
   Promise.allSettled([
     run("news", fetchNews), run("intel", fetchIntel), run("ai", fetchAI)
   ]).then(function () {
+    freshDevice = false;
     scanning = false;
     btn.disabled = false;
     btn.textContent = "RUN SCAN";
@@ -2203,19 +2231,15 @@ function renderFeed() {
     if (!failed.length) return;
     html += '<div class="notice">' + CHANNELS[ch] + ': ' + failed.length + ' OF ' + health[ch].length +
       ' SOURCES FAILED \u00B7 ' + failed.map(function (f) { return esc(f.source) + ' (' + esc(f.error) + ')'; }).join(', ') +
-      ' \u00B7 SEE EDIT SOURCES</div>';
+      (readOnly ? '' : ' \u00B7 SEE EDIT SOURCES') + '</div>';
   });
 
-  if (scanned && hiddenCount) {
+  if (scanned && hiddenCount && !readOnly) {
     html += '<div class="notice">' + hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') +
       ' HIDDEN BY BLOCKED WORDS \u00B7 SEE EDIT SOURCES</div>';
   }
 
-  if (scanned && newOnly) {
-    html += '<div class="notice">SHOWING ' + newCount + ' NEW IN THE LAST 24 HOURS<button data-act="newonly">SHOW ALL</button></div>';
-  } else if (scanned && newCount) {
-    html += '<div class="notice">' + newCount + ' NEW IN THE LAST 24 HOURS<button data-act="newonly">NEW ONLY</button></div>';
-  }
+  document.getElementById("newOnlyBtn").textContent = scanned ? "NEW ONLY (" + newCount + ")" : "NEW ONLY";
 
   if (scanned && searching) html += searchNote(visible.length);
 
