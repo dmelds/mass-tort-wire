@@ -2164,6 +2164,18 @@ function aiStoryOk(item) {
   return AI_LEGAL.test(itemText(item));
 }
 
+// The outlet site searches (Reuters, Law360, Yahoo) carry no topic tag of their own, so a story
+// from one keeps its place only by naming a topic in its headline or summary. Google News
+// matches words anywhere on the page, and Yahoo pages carry long sidebars, so a Yahoo-hosted game
+// review or a WordPress boardroom story can answer an intitle: search. Every other Google News
+// result arrives tagged by the topic, firm or AI line that found it, and direct feeds (firm
+// blogs, AboutLawsuits) are not Google links, so this rule reaches the site searches alone.
+function outletStoryOk(item) {
+  if (item.channel !== "news" || !/news\.google\.com/.test(item.url || "")) return true;
+  if ((item.matched && item.matched.length) || (item.watch && item.watch.length)) return true;
+  return topicsOf(item).length > 0;
+}
+
 function firmStoryOk(item) {
   if (!item.watch || !item.watch.length) return true;
   if ((item.matched && item.matched.length) || topicsOf(item).length) return true;
@@ -2182,7 +2194,7 @@ function renderFeed() {
     seenUrl[k] = true;
     return true;
   });
-  var shown = unique.filter(function (i) { return !isBlocked(i) && firmStoryOk(i) && aiStoryOk(i); });
+  var shown = unique.filter(function (i) { return !isBlocked(i) && firmStoryOk(i) && aiStoryOk(i) && outletStoryOk(i); });
   var hiddenCount = unique.length - shown.length;
 
   // MY TOPICS ONLY keeps a story when it names one of your tracked topics, or when a firm name
