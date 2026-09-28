@@ -2164,16 +2164,22 @@ function aiStoryOk(item) {
   return AI_LEGAL.test(itemText(item));
 }
 
-// The outlet site searches (Reuters, Law360, Yahoo) carry no topic tag of their own, so a story
-// from one keeps its place only by naming a topic in its headline or summary. Google News
-// matches words anywhere on the page, and Yahoo pages carry long sidebars, so a Yahoo-hosted game
-// review or a WordPress boardroom story can answer an intitle: search. Every other Google News
-// result arrives tagged by the topic, firm or AI line that found it, and direct feeds (firm
-// blogs, AboutLawsuits) are not Google links, so this rule reaches the site searches alone.
-function outletStoryOk(item) {
+// A Google News result on the News Wire has to show why it is there. Google matches words
+// anywhere on the page, sidebars included, so a search can return a Gizmodo boardroom story or
+// an IMDb item whose headline and summary never use the search's words. Such a story shows no
+// tag, since a tracked topic the story doesn't mention is left off.
+//   Site searches (Reuters, Law360, Yahoo) carry no tag of their own: an untagged one is dropped
+//   on every copy.
+//   Topic searches tag every result: on a firm copy an untagged one stays only from a trusted
+//   publisher (a Reuters "forever chemicals" story on the PFAS search). Your own wire keeps
+//   them, as it always has.
+// Direct feeds (firm blogs, AboutLawsuits) are not Google links, so this rule leaves them alone.
+function googleStoryOk(item) {
   if (item.channel !== "news" || !/news\.google\.com/.test(item.url || "")) return true;
-  if ((item.matched && item.matched.length) || (item.watch && item.watch.length)) return true;
-  return topicsOf(item).length > 0;
+  if (tagsOf(item).length) return true;
+  if (!(item.matched && item.matched.length) && !(item.watch && item.watch.length)) return false;
+  if (!FIRM_BUILD) return true;
+  return fromTrusted(item);
 }
 
 function firmStoryOk(item) {
@@ -2194,7 +2200,7 @@ function renderFeed() {
     seenUrl[k] = true;
     return true;
   });
-  var shown = unique.filter(function (i) { return !isBlocked(i) && firmStoryOk(i) && aiStoryOk(i) && outletStoryOk(i); });
+  var shown = unique.filter(function (i) { return !isBlocked(i) && firmStoryOk(i) && aiStoryOk(i) && googleStoryOk(i); });
   var hiddenCount = unique.length - shown.length;
 
   // MY TOPICS ONLY keeps a story when it names one of your tracked topics, or when a firm name
