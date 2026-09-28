@@ -1281,7 +1281,7 @@ var TOPIC_RULES = {
 // "Roundup" also names a news digest: "UK Litigation Roundup: Here's What You Missed",
 // "Pennsylvania Roundup: Coalition secures settlement". The digest form is a heading followed by
 // a colon, or a word like Litigation or Weekly in front. Those don't count as the herbicide.
-var DIGEST_BEFORE = /\b(litigation|legal|law|news|weekly|daily|week|morning|evening|friday|monday|state|regional)\s+roundups?\b/i;
+var DIGEST_BEFORE = /\b(litigation|legal|law|news|weekly|daily|week|morning|evening|friday|monday|state|regional|review|reviews|sports|nfl|nba|mlb|nhl|wta|atp|tennis|golf|tech|gaming)\s+roundups?\b/i;
 var DIGEST_AFTER = /\broundups?\s*:/i;
 
 function namesRx(names) {
@@ -2167,21 +2167,26 @@ function aiStoryOk(item) {
 }
 
 // A Google News result on the News Wire has to show why it is there. Google matches words
-// anywhere on the page, sidebars included, so a search can return a Gizmodo boardroom story or
-// an IMDb item whose headline and summary never use the search's words. Such a story shows no
-// tag, since a tracked topic the story doesn't mention is left off.
-//   Site searches (Reuters, Law360, Yahoo) carry no tag of their own: an untagged one is dropped
-//   on every copy.
-//   Topic searches tag every result: on a firm copy an untagged one stays only from a trusted
-//   publisher (a Reuters "forever chemicals" story on the PFAS search). Your own wire keeps
-//   them, as it always has.
+// anywhere on the page, sidebars included, so a search returns game reviews, sports roundups
+// (the Roundup search), GLP-1 stock stories and HOA liens (the lien search) whose headlines are
+// not about law. A story stays when it carries a tag (it names a topic or a watched firm) or
+// when its headline or summary is legal news: AI_LEGAL's words plus NEWS_LEGAL's. Tested on the
+// 62 untagged stories on the Verus wire 9/28/26: kept 26 of 28 real legal stories, dropped 19 of
+// 20 junk ones. The rest stay one tap away behind SHOW.
+//   Site searches (Reuters, Law360, Yahoo) carry no tag of their own: tagged or legal, on every copy.
+//   Topic and firm searches: on a firm copy, tagged or legal. Your own wire keeps them all, as
+//   it always has.
 // Direct feeds (firm blogs, AboutLawsuits) are not Google links, so this rule leaves them alone.
+var NEWS_LEGAL = /\b(suits?|llp|mediation|arbitrat\w*|circuit|bankrupt\w*|chapter\s+11|ch\.\s*11|recalls?|recalled|fda|doj|wrongful|negligen\w*|liability|liable|attorney|investigat\w*\s+(into|of)\s+\w+|hit\s+with)\b/i;
+function isLegalNews(item) {
+  var text = itemText(item);
+  return AI_LEGAL.test(text) || NEWS_LEGAL.test(text);
+}
 function googleStoryOk(item) {
   if (item.channel !== "news" || !/news\.google\.com/.test(item.url || "")) return true;
-  if (tagsOf(item).length) return true;
+  if (tagsOf(item).length || isLegalNews(item)) return true;
   if (!(item.matched && item.matched.length) && !(item.watch && item.watch.length)) return false;
-  if (!FIRM_BUILD) return true;
-  return fromTrusted(item);
+  return !FIRM_BUILD;
 }
 
 function firmStoryOk(item) {
@@ -2261,8 +2266,8 @@ function renderFeed() {
 
   if (scanned && untaggedCount) {
     html += '<div class="notice">' + (showUntagged
-      ? 'SHOWING ' + untaggedCount + (untaggedCount === 1 ? ' STORY THAT NAMES' : ' STORIES THAT NAME') + ' NO TOPIC<button data-act="untagged">HIDE</button>'
-      : untaggedCount + (untaggedCount === 1 ? ' STORY NAMES' : ' STORIES NAME') + ' NO TOPIC IN THE HEADLINE<button data-act="untagged">SHOW</button>') + '</div>';
+      ? 'SHOWING ' + untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + '<button data-act="untagged">HIDE</button>'
+      : untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + ' HIDDEN<button data-act="untagged">SHOW</button>') + '</div>';
   }
 
   if (scanned && hiddenCount && !readOnly) {
