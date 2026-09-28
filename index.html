@@ -1045,6 +1045,14 @@ var AG_STATES = "alabama|alaska|arizona|arkansas|california|colorado|connecticut
   "wisconsin|wyoming|d\\.c\\.|district of columbia|puerto rico";
 
 var TOPIC_RULES = {
+  // "data breach class action" and "data breach settlement" both reduce to "data breach", which
+  // alone matches every hack in the news. The bare phrase counts only beside a legal word; the
+  // full phrases count on their own.
+  "data breach": {
+    names: ["data breach class action", "data breach settlement", "data breach lawsuit", "data breach litigation"],
+    loose: ["data breach", "data breaches"],
+    context: /\b(lawsuits?|suits?|class\s+actions?|settle(d|s|ment|ments)?|sue[sd]?|suing|litigation|claims?|claimants?|plaintiffs?|attorneys?|law\s*firms?|payouts?|compensation)\b/i
+  },
   "pfas": { names: ["forever chemical", "pfoa", "pfos"] },
   "afff": { names: ["firefighting foam", "firefighter foam", "fire-fighting foam", "aqueous film"] },
   "depo-provera": { names: ["medroxyprogesterone"] },
