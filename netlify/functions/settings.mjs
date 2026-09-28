@@ -66,7 +66,8 @@ export default async (req) => {
 
   if (req.method === "GET") {
     const settings = await store.get(KEY, { type: "json" });
-    return reply(200, { settings: settings || null });
+    // canWrite tells the page which key it holds, so a viewer's page hides the setup form.
+    return reply(200, { settings: settings || null, canWrite: canWrite(req) });
   }
 
   if (req.method === "PUT" || req.method === "POST") {
