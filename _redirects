@@ -1,0 +1,8 @@
+# masstortwire.com is the front door. The bare domain and www send readers to the wire's
+# page on Lawsuit Intelligencer, tagged so the visits show up there as referrals from the
+# domain. Your own wire lives at desk.masstortwire.com and each firm copy at
+# <firm>.masstortwire.com. Every rule matches its host exactly, so no other address is affected.
+https://masstortwire.com/*      https://lawsuitintelligencer.com/mass-tort-wire?utm_source=masstortwire&utm_medium=referral&utm_campaign=domain  301!
+http://masstortwire.com/*       https://lawsuitintelligencer.com/mass-tort-wire?utm_source=masstortwire&utm_medium=referral&utm_campaign=domain  301!
+https://www.masstortwire.com/*  https://lawsuitintelligencer.com/mass-tort-wire?utm_source=masstortwire&utm_medium=referral&utm_campaign=domain  301!
+http://www.masstortwire.com/*   https://lawsuitintelligencer.com/mass-tort-wire?utm_source=masstortwire&utm_medium=referral&utm_campaign=domain  301!
