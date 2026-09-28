@@ -244,7 +244,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit = Gramoxone">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search over the window plus one over the last 24 hours, up to 20 topics. A story counts for a topic when its headline or summary names it. Give the other names the press uses after an equals sign, separated by commas: <b>talc lawsuit = talcum powder, baby powder</b>. The stock topics already carry their names, so asbestos catches mesothelioma and PFAS catches forever chemicals. AI topics show in the AI Wire and Intelligencer topics in INTELLIGENCER. NEWS WIRE shows all of them. On a firm copy, a Google News result that names no topic and no watched firm stays on the wire only when it reads as legal news; the rest sit behind an OFF-TOPIC line with a SHOW button.</p>
+  <p class="hint">Each topic runs as a Google News search over the window plus one over the last 24 hours, up to 20 topics. A story counts for a topic when its headline or summary names it. Give the other names the press uses after an equals sign, separated by commas: <b>talc lawsuit = talcum powder, baby powder</b>. The stock topics already carry their names, so asbestos catches mesothelioma and PFAS catches forever chemicals. AI topics show in the AI Wire and Intelligencer topics in INTELLIGENCER. NEWS WIRE shows all of them. A Google News result that names no topic and no watched firm stays on the wire only when it reads as legal news; the rest sit behind an OFF-TOPIC line with a SHOW button.</p>
 
   <div class="label">FIRMS TO WATCH (ONE PER LINE)</div>
   <textarea id="firmWatchInput" rows="6"></textarea>
@@ -265,7 +265,7 @@
 
   <div class="label">AI SEARCHES (ONE PER LINE)</div>
   <textarea id="aiSearchInput" rows="8"></textarea>
-  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. Quotes force a word to appear, and intitle: forces it into the headline. Google News ignores allintitle:. On a firm copy the AI Wire keeps only AI news about law; start a line with * to keep everything that line returns.</p>
+  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. Quotes force a word to appear, and intitle: forces it into the headline. Google News ignores allintitle:. The AI Wire keeps only AI news about law; start a line with * to keep everything that line returns, for AI safety and policy news.</p>
 
   <div class="label">AI FEEDS (ONE PER LINE)</div>
   <textarea id="aiFeedsInput" rows="3"></textarea>
@@ -428,7 +428,10 @@ var DEFAULTS = {
     '"hallucinated" OR "fabricated" citations court lawyer',
     '"artificial intelligence" "judiciary"',
     '"AI-generated" evidence court',
-    '"ChatGPT" "lawsuit" teen'
+    '"ChatGPT" "lawsuit" teen',
+    '* intitle:"kill switch" AI OR OpenAI OR Anthropic OR xAI',
+    '* intitle:"pauses training" OR intitle:"halts training" OR intitle:"escaped containment"',
+    '* intitle:"AI safety" Senate OR Congress OR regulators OR lawmakers'
   ],
   aiFeeds: [
     "https://www.lawnext.com/feed",
@@ -2212,9 +2215,8 @@ function isAiStory(item) {
   return AI_CAPS.test(text) || AI_NAMES.test(text);
 }
 function aiStoryOk(item) {
-  // Firm copies only. Your own wire's AI beat includes AI safety and policy news (kill switches,
-  // training pauses, Senate probes) whose headlines carry no legal word, so it takes every result.
-  if (!FIRM_BUILD) return true;
+  // Every build. AI safety and policy news (kill switches, training pauses, Senate probes) comes
+  // in through lines that start with *, which keep everything they return.
   if (item.channel !== "ai") return true;
   if (topicsOf(item).length) return true;
   var open = openAiLines();
@@ -2229,9 +2231,8 @@ function aiStoryOk(item) {
 // when its headline or summary is legal news: AI_LEGAL's words plus NEWS_LEGAL's. Tested on the
 // 62 untagged stories on the Verus wire 9/28/26: kept 26 of 28 real legal stories, dropped 19 of
 // 20 junk ones. The rest stay one tap away behind SHOW.
-//   Site searches (Reuters, Law360, Yahoo) carry no tag of their own: tagged or legal, on every copy.
-//   Topic and firm searches: on a firm copy, tagged or legal. Your own wire keeps them all, as
-//   it always has.
+// The same rule on every build, for site searches (Reuters, Law360, Yahoo) and topic and firm
+// searches alike: tagged or legal, or it goes behind OFF-TOPIC.
 // Feeds you listed (firm blogs, AboutLawsuits) are marked direct on arrival and skip this rule.
 var NEWS_LEGAL = /\b(suits?|llp|mediation|arbitrat\w*|circuit|bankrupt\w*|chapter\s+11|ch\.\s*11|recalls?|recalled|fda|doj|wrongful|negligen\w*|liability|liable|attorney|investigat\w*\s+(into|of)\s+\w+|hit\s+with)\b/i;
 function isLegalNews(item) {
@@ -2240,9 +2241,7 @@ function isLegalNews(item) {
 }
 function googleStoryOk(item) {
   if (item.channel !== "news" || item.direct) return true;
-  if (tagsOf(item).length || isLegalNews(item)) return true;
-  if (!(item.matched && item.matched.length) && !(item.watch && item.watch.length)) return false;
-  return !FIRM_BUILD;
+  return tagsOf(item).length > 0 || isLegalNews(item);
 }
 
 function firmStoryOk(item) {
@@ -2279,11 +2278,11 @@ function renderFeed() {
   // search found it and the story names that firm: firm news (a founder's obituary, a sponsorship
   // deal) rarely names a tort. An AI search line or a topic search that merely returned the story
   // doesn't count.
-  // On a firm copy the AI Wire has its own filter (aiStoryOk keeps legal AI news only), and AI
-  // stories rarely name a firm's litigations, so MY TOPICS ONLY leaves that tab alone.
+  // The AI Wire has its own filter (aiStoryOk keeps legal AI news and the starred lines), and AI
+  // stories rarely name a tracked litigation, so MY TOPICS ONLY leaves that tab alone.
   var base = settings.topicsOnly
     ? shown.filter(function (i) {
-        if (FIRM_BUILD && chan(i) === "ai") return true;
+        if (chan(i) === "ai") return true;
         return topicsOf(i).length || namesWatchedFirm(i);
       })
     : shown;
