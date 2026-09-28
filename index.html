@@ -177,6 +177,7 @@
   .item .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .item .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); border: 1px solid var(--rule); padding: 2px 6px; }
   .item .tag.firm { color: var(--firms); border-color: var(--firms); }
+  .item .tag.why { color: var(--bad); border-color: var(--bad); }
 
   footer { border-top: 1px solid var(--rule); padding: 16px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); line-height: 1.6; }
 
@@ -2158,10 +2159,27 @@ function blockedRules() {
   var key = settings.blockedTerms.join("\n");
   if (blockedCache.key === key) return blockedCache.rules;
   var rules = settings.blockedTerms.map(function (t) {
-    return t.split("+").map(function (w) { return w.trim(); }).filter(Boolean).map(wordRx);
+    var r = t.split("+").map(function (w) { return w.trim(); }).filter(Boolean).map(wordRx);
+    r.term = t;
+    return r;
   }).filter(function (r) { return r.length; });
   blockedCache = { key: key, rules: rules };
   return rules;
+}
+
+// Why a story is off the feed, for the HIDDEN list: the blocked word that caught it, or the
+// rule that set it aside.
+function hiddenReason(item) {
+  var text = itemText(item);
+  for (var i = 0, rules = blockedRules(); i < rules.length; i++) {
+    if (rules[i].every(function (re) { return re.test(text); })) {
+      var term = rules[i].term;
+      return "BLOCKED WORD: " + (term.length > 40 ? term.slice(0, 37) + "\u2026" : term);
+    }
+  }
+  if (!aiStoryOk(item)) return "NO LEGAL ANGLE IN THE HEADLINE";
+  if (!firmStoryOk(item)) return "FIRM NOT NAMED IN THE HEADLINE";
+  return "";
 }
 
 function isBlocked(item) {
@@ -2227,7 +2245,7 @@ function fromTrusted(item) {
 // fiction. A story on the AI Wire stays when its headline or summary is about law or legal work,
 // or when it proves one of your topics. A trusted source gets no pass here: Reuters runs plenty
 // of AI business news.
-var AI_LEGAL = /\b(law|laws|legal|lawyers?|attorneys?|law\s*firms?|courts?|judges?|judicial|judiciary|jur(y|ors?)|trials?|lawsuits?|su(ed|es|ing)|litigat\w*|plaintiffs?|defendants?|settle(d|s|ment|ments)?|class\s+actions?|claims?|claimants?|verdicts?|rulings?|ruled|sanction(s|ed)?|hallucinat\w*|citations?|filings?|briefs?|depositions?|evidence|discovery|e-?discovery|mdl|regulators?|attorney\s+general|ftc|bar\s+association|paralegals?|legal\s*tech|legaltech|patents?|intellectual\s+property)\b/i;
+var AI_LEGAL = /\b(law|laws|legal|lawyers?|attorneys?|law\s*firms?|courts?|judges?|judicial|judiciary|jur(y|ors?)|trials?|lawsuits?|su(ed|es|ing)|litigat\w*|plaintiffs?|defendants?|settle(d|s|ment|ments)?|class\s+actions?|claims?|claimants?|verdicts?|rulings?|ruled|sanction(s|ed)?|hallucinat\w*|citations?|filings?|briefs?|depositions?|evidence|discovery|e-?discovery|mdl|regulators?|attorney\s+general|ftc|bar\s+association|paralegals?|legal\s*tech|legaltech|patents?|intellectual\s+property|complaints?|sue|criminal|prosecut\w*|charged|arrest\w*|indict\w*|police|probes?|injunction\w*|restrain\w*|emergency\s+order|liable|liability|responsible|deepfakes?|shooters?|shootings?|harms?|minors?)\b/i;
 // An open (*) line keeps a story only when the headline or summary is about AI. Google News
 // matches words anywhere on the page, so a sidebar link reading "AI safety" can pull in an
 // unrelated Bloomberg story.
@@ -2357,8 +2375,8 @@ function renderFeed() {
 
   if (scanned && hiddenCount) {
     html += '<div class="notice">' + (showBlocked
-      ? hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') + ' HIDDEN BY BLOCKED WORDS, LISTED AT THE END OF THE FEED<button data-act="blocked">HIDE</button>'
-      : hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') + ' HIDDEN BY BLOCKED WORDS<button data-act="blocked">SHOW</button>') + '</div>';
+      ? hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') + ' HIDDEN BY YOUR FILTERS, LISTED AT THE END OF THE FEED<button data-act="blocked">HIDE</button>'
+      : hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') + ' HIDDEN BY YOUR FILTERS<button data-act="blocked">SHOW</button>') + '</div>';
   }
 
   document.getElementById("newOnlyBtn").textContent = scanned ? "NEW ONLY (" + newCount + ")" : "NEW ONLY";
@@ -2382,7 +2400,7 @@ function renderFeed() {
   visible.forEach(function (i) { var d = dayOf(i); dayCounts[d] = (dayCounts[d] || 0) + 1; });
   var lastDay = null;
 
-  function itemHtml(item, extra) {
+  function itemHtml(item, extra, note) {
     var watch = item.watch || [];
     var tags = tagsOf(item).map(function (t) {
       return '<span class="tag' + (watch.indexOf(t) !== -1 ? ' firm' : '') + '">' + esc(tagLabel(t)) + '</span>';
@@ -2402,7 +2420,7 @@ function renderFeed() {
       + (isNew(item) ? '<span class="new">NEW</span>' : '') + '</div>'
       + '<div class="title">' + highlight(item.title, words) + '</div>'
       + (item.summary ? '<p class="sum">' + highlight(item.summary, words) + '</p>' : '')
-      + (tags ? '<div class="tags">' + tags + '</div>' : '')
+      + (tags || note ? '<div class="tags">' + tags + (note ? '<span class="tag why">' + esc(note) + '</span>' : '') + '</div>' : '')
       + '</a>';
   }
 
@@ -2424,8 +2442,8 @@ function renderFeed() {
   }
   if (showBlocked && hiddenCount) {
     var blkFolded = foldVersions(blockedOut.filter(function (i) { return inTab(i, filter) && matches(i); }));
-    html += '<div class="day offtopic"><span>HIDDEN BY BLOCKED WORDS</span><span class="n">' + blkFolded.list.length + '</span></div>';
-    blkFolded.list.forEach(function (item) { html += itemHtml(item, blkFolded.extra); });
+    html += '<div class="day offtopic"><span>HIDDEN BY YOUR FILTERS \u00B7 EACH SHOWS WHY</span><span class="n">' + blkFolded.list.length + '</span></div>';
+    blkFolded.list.forEach(function (item) { html += itemHtml(item, blkFolded.extra, hiddenReason(item)); });
   }
 
   document.getElementById("feed").innerHTML = html;
