@@ -816,6 +816,20 @@ function addTopic() {
 }
 document.getElementById("addTopic").onclick = addTopic;
 document.getElementById("topicInput").addEventListener("keydown", function (e) { if (e.key === "Enter") addTopic(); });
+// A one-line box joins a pasted list into a single topic. A paste of several lines adds each
+// line as its own topic instead.
+document.getElementById("topicInput").addEventListener("paste", function (e) {
+  var text = (e.clipboardData || window.clipboardData).getData("text") || "";
+  var lines = text.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+  if (lines.length < 2) return;
+  e.preventDefault();
+  lines.forEach(function (t) {
+    var exists = settings.topics.some(function (v) { return v.toLowerCase() === t.toLowerCase(); });
+    if (!exists) settings.topics.push(t);
+  });
+  this.value = "";
+  persist(); renderChips();
+});
 
 document.getElementById("newsFeedsInput").addEventListener("change", function () {
   settings.newsFeeds = linesOf("newsFeedsInput"); persist();
@@ -1274,6 +1288,7 @@ function syncMiddleTab() {
   var btn = document.querySelector('.filters button[data-f="intel"]');
   var show = settings.topics.some(function (t) { return topicTab(t) === "intel"; });
   btn.hidden = !show;
+  document.querySelector(".channel-status .intel").hidden = !show;
   if (!show && filter === "intel") document.querySelector('.filters button[data-f="news"]').click();
 }
 
@@ -2004,6 +2019,42 @@ function namesWatchedFirm(item) {
   return (item.watch || []).some(function (name) { return firmPattern(name).test(text); });
 }
 
+// A story that reached the wire only through a firm-name search has to show it is about the
+// firm. Google drops the "&" in "Morgan & Morgan" and returns hockey players named Morgan, and
+// a one-word name like Epiq also names a car. Such a story stays when:
+//   it names in full a watched firm whose name has two distinctive words ("Beasley Allen"), or
+//   its headline or summary uses a legal or business word (verdict, settlement, sponsorship), or
+//   it comes from a trusted source (Reuters, Law360), which Google matched on the full article.
+// Stories that also prove one of your topics, or that came from a feed, are never checked here.
+var FIRM_CONTEXT = /\b(law\s*firms?|lawyers?|attorneys?|lawsuits?|litigation|litigat\w*|settle(d|s|ment|ments)?|verdicts?|jur(y|ors?)|judges?|courts?|trials?|mdl|class\s+actions?|claims?|claimants?|plaintiffs?|defendants?|counsel|legal|su(ed|es|ing)|filed|complaints?|bankruptcy|administrators?|sponsor(s|ed|ship|ships)?|partner(s|ed|ship)?|acquir(e|es|ed)|acquisition|merger|appoint(s|ed|ment)?|injur(y|ies|ed)|offices?|hir(e|es|ed|ing)|join(s|ed)?|expan(d|ds|ded|sion))\b/i;
+function distinctiveWords(name) {
+  var words = name.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+  var seen = {};
+  return words.filter(function (w) {
+    if (w.length < 3 || FIRM_NAME_SKIP[w] || seen[w]) return false;
+    seen[w] = 1; return true;
+  }).length;
+}
+var firmFullCache = {};
+function firmFullPattern(name) {
+  if (!firmFullCache[name]) {
+    var full = rx(name).replace(/\s*&\s*/g, "\\s*(&|and)\\s*").replace(/\s+/g, "\\s+");
+    firmFullCache[name] = new RegExp("\\b" + full + "\\b", "i");
+  }
+  return firmFullCache[name];
+}
+function fromTrusted(item) {
+  var src = ((item.source || "") + " " + (item.host || "") + " " + (item.sourceUrl || "")).toLowerCase();
+  return (settings.trustedSources || []).some(function (t) { return t && src.indexOf(t.toLowerCase()) !== -1; });
+}
+function firmStoryOk(item) {
+  if (!item.watch || !item.watch.length) return true;
+  if ((item.matched && item.matched.length) || topicsOf(item).length) return true;
+  var text = itemText(item);
+  if (FIRM_CONTEXT.test(text) || fromTrusted(item)) return true;
+  return item.watch.some(function (name) { return distinctiveWords(name) >= 2 && firmFullPattern(name).test(text); });
+}
+
 function renderFeed() {
   // A story fetched by two channels shows once, in the channel chan() gives it.
   var seenUrl = {};
@@ -2014,7 +2065,7 @@ function renderFeed() {
     seenUrl[k] = true;
     return true;
   });
-  var shown = unique.filter(function (i) { return !isBlocked(i); });
+  var shown = unique.filter(function (i) { return !isBlocked(i) && firmStoryOk(i); });
   var hiddenCount = unique.length - shown.length;
 
   // MY TOPICS ONLY keeps a story when it names one of your tracked topics, or when a firm name
