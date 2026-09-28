@@ -2116,6 +2116,15 @@ function fromTrusted(item) {
 // or when it proves one of your topics. A trusted source gets no pass here: Reuters runs plenty
 // of AI business news.
 var AI_LEGAL = /\b(law|laws|legal|lawyers?|attorneys?|law\s*firms?|courts?|judges?|judicial|judiciary|jur(y|ors?)|trials?|lawsuits?|su(ed|es|ing)|litigat\w*|plaintiffs?|defendants?|settle(d|s|ment|ments)?|class\s+actions?|claims?|claimants?|verdicts?|rulings?|ruled|sanction(s|ed)?|hallucinat\w*|citations?|filings?|briefs?|depositions?|evidence|discovery|e-?discovery|mdl|regulators?|attorney\s+general|ftc|bar\s+association|paralegals?|legal\s*tech|legaltech|patents?|intellectual\s+property)\b/i;
+// An open (*) line keeps a story only when the headline or summary is about AI. Google News
+// matches words anywhere on the page, so a sidebar link reading "AI safety" can pull in an
+// unrelated Bloomberg story.
+var AI_CAPS = /\bA\.?I\.?\b|\bAGI\b|\bLLMs?\b|\bGPT/;
+var AI_WORDS = /\b(artificial\s+intelligence|openai|anthropic|xai|deepmind|chatgpt|chatbots?|claude|gemini|grok|copilot|machine\s+learning|superintelligen\w*|frontier\s+models?|deepfakes?|algorithms?)\b/i;
+function isAiStory(item) {
+  var text = itemText(item);
+  return AI_CAPS.test(text) || AI_WORDS.test(text);
+}
 function aiStoryOk(item) {
   // Firm copies only. Your own wire's AI beat includes AI safety and policy news (kill switches,
   // training pauses, Senate probes) whose headlines carry no legal word, so it takes every result.
@@ -2123,7 +2132,7 @@ function aiStoryOk(item) {
   if (item.channel !== "ai") return true;
   if (topicsOf(item).length) return true;
   var open = openAiLines();
-  if ((item.matched || []).some(function (t) { return open[t]; })) return true;
+  if ((item.matched || []).some(function (t) { return open[t]; })) return isAiStory(item);
   return AI_LEGAL.test(itemText(item));
 }
 
