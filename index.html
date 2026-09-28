@@ -245,7 +245,7 @@
 
   <div class="label">AI SEARCHES (ONE PER LINE)</div>
   <textarea id="aiSearchInput" rows="8"></textarea>
-  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. Quotes force a word to appear, and intitle: forces it into the headline. Google News ignores allintitle:.</p>
+  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. Quotes force a word to appear, and intitle: forces it into the headline. Google News ignores allintitle:. On a firm copy the AI Wire keeps only AI news about law; start a line with * to keep everything that line returns.</p>
 
   <div class="label">AI FEEDS (ONE PER LINE)</div>
   <textarea id="aiFeedsInput" rows="3"></textarea>
@@ -1684,8 +1684,17 @@ function fetchNews() {
 
 // Each AI line is the search, run verbatim. The line also tags every item it returns,
 // so an AI story shows the beat it came from. That tag is not one of your topics.
+// A line starting with * is an open line: on a firm copy, whatever it returns stays on the
+// AI Wire even when the headline carries no legal word (AI safety and policy news). The * is
+// stripped before the search runs and from the tag the story carries.
+function aiLine(q) { return String(q).replace(/^\s*\*\s*/, "").trim(); }
+function openAiLines() {
+  var out = {};
+  settings.aiSearches.forEach(function (q) { if (/^\s*\*/.test(q) && aiLine(q)) out[aiLine(q)] = true; });
+  return out;
+}
 function aiSearches() {
-  return withTodayPass(settings.aiSearches.slice(0, 12).map(function (q) {
+  return withTodayPass(settings.aiSearches.slice(0, 12).map(aiLine).filter(Boolean).map(function (q) {
     return { url: gnews(q + whenClause()), topic: q };
   }));
 }
@@ -2113,6 +2122,8 @@ function aiStoryOk(item) {
   if (!FIRM_BUILD) return true;
   if (item.channel !== "ai") return true;
   if (topicsOf(item).length) return true;
+  var open = openAiLines();
+  if ((item.matched || []).some(function (t) { return open[t]; })) return true;
   return AI_LEGAL.test(itemText(item));
 }
 
