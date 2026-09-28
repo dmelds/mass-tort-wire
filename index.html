@@ -188,6 +188,7 @@
 <div class="controls">
   <button id="scanBtn">RUN SCAN</button>
   <button id="configBtn" class="ghost">EDIT SOURCES</button>
+  <button id="keyBtnTop" class="ghost" hidden>WIRE KEY</button>
   <div class="channel-status">
     <span class="news">NEWS <span id="st-news"></span></span>
     <span class="intel">INTEL <span id="st-intel"></span></span>
@@ -704,7 +705,17 @@ function setSync(text, bad) {
   el.style.color = bad ? "var(--bad)" : "";
 }
 
+// A viewer key reads the shared setup and cannot change it. The page learns which key it holds
+// from the site, hides the setup form for a viewer, and never tries to save.
+var readOnly = false;
+function applyRole() {
+  document.getElementById("configBtn").hidden = readOnly;
+  document.getElementById("keyBtnTop").hidden = !readOnly;
+  if (readOnly) document.getElementById("config").classList.remove("open");
+}
+
 function pushSettings() {
+  if (readOnly) return;
   var body = JSON.stringify(settings);
   if (body === lastSynced) return;
   fetchT(SETTINGS_URL, {
@@ -728,12 +739,16 @@ function pushSettings() {
 function pullSettings() {
   return fetchT(SETTINGS_URL, { cache: "no-store" }, 5000)
     .then(function (res) { return res.ok ? res.json() : undefined; })
-    .then(function (data) { return data ? data.settings : undefined; })
+    .then(function (data) {
+      if (data) readOnly = data.canWrite === false;
+      return data ? data.settings : undefined;
+    })
     .catch(function () { return undefined; });
 }
 
 function persist() {
   save(STORE_KEY, settings);
+  if (readOnly) return;   // a viewer's view choices (MY TOPICS ONLY, the window) stay on this device
   clearTimeout(syncTimer);
   syncTimer = setTimeout(pushSettings, 600);
 }
@@ -904,6 +919,10 @@ document.getElementById("resetBtn").onclick = function () {
   if (!confirm("Reset topics and feeds to the defaults?")) return;
   applySettings({ version: SETTINGS_VERSION });
   persist(); fillInputs(); renderFeed();
+};
+
+document.getElementById("keyBtnTop").onclick = function () {
+  if (askWireKey("Enter the wire key for this device.")) location.reload();
 };
 
 document.getElementById("keyBtn").onclick = function () {
@@ -2173,7 +2192,9 @@ function renderFeed() {
 
   if (scanned && searching) html += searchNote(visible.length);
 
-  if (!scanned && FIRM_BUILD && !settings.topics.length) {
+  if (!scanned && FIRM_BUILD && !settings.topics.length && readOnly) {
+    html += '<div class="empty-state"><p class="display">This wire is not set up yet.</p><p>Its editor has not added topics. Check back shortly.</p></div>';
+  } else if (!scanned && FIRM_BUILD && !settings.topics.length) {
     html += '<div class="empty-state"><p class="display">Your wire starts empty.</p>' +
       '<p>Under EDIT SOURCES, enter your firm name, add the litigations you sign as tracked topics, and put your firm and the firms you watch under FIRMS TO WATCH. Then press RUN SCAN.</p></div>';
   } else if (!scanned) {
@@ -2226,12 +2247,19 @@ fillInputs();
 renderFeed();
 setSync("Checking the site for saved settings\u2026");
 pullSettings().then(function (remote) {
+  applyRole();
   if (remote) {
     var migrated = applySettings(remote);
+    // A viewer keeps its own view choices across reloads; everything else comes from the site.
+    if (readOnly && storedSettings) {
+      if (typeof storedSettings.topicsOnly === "boolean") settings.topicsOnly = storedSettings.topicsOnly;
+      if (storedSettings.windowDays) settings.windowDays = storedSettings.windowDays;
+    }
     lastSynced = migrated ? "" : JSON.stringify(settings);
     save(STORE_KEY, settings);
-    if (migrated) pushSettings();
-    else setSync("Loaded from the site. Every window, private ones included, loads this setup.");
+    if (migrated && !readOnly) pushSettings();
+    else setSync(readOnly ? "Read-only copy. The wire's editor maintains its topics and sources."
+                          : "Loaded from the site. Every window, private ones included, loads this setup.");
   } else if (remote === null) {
     // Nothing on the site yet. A window that has its own saved setup becomes the shared copy.
     if (storedSettings) pushSettings();
@@ -2240,6 +2268,10 @@ pullSettings().then(function (remote) {
     setSync("Couldn't reach the site, so this window is using the settings saved in it.", true);
   }
   fillInputs();
+  if (FIRM_BUILD && !settings.topics.length && readOnly) {
+    renderFeed();
+    return;
+  }
   if (FIRM_BUILD && !settings.topics.length) {
     // A firm's first open: nothing to scan yet, so open the setup instead.
     var cfg = document.getElementById("config");
