@@ -1,3 +1,6 @@
+// Mass Tort Wire. Copyright (c) 2026 David Meldofsky. All rights reserved.
+// No license is granted to copy, modify or redistribute this code.
+
 // Saves the wire's settings on the site, so every window loads the same setup:
 // the web app, a regular Safari window, and a private window that can't see saved browser data.
 //
