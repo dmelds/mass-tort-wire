@@ -1805,7 +1805,12 @@ function sameStory(a, b) {
   return sharedWords(a, b) / Math.min(a.n, b.n) >= SAME_SHARE;
 }
 function relatedStory(a, b) {
-  if (a.n < 5 || b.n < 5) return false;
+  // A short headline ("Bill Gates on an AI kill switch") is a version of a longer one that
+  // carries every one of its content words.
+  if (a.n < 5 || b.n < 5) {
+    var short = a.n <= b.n ? a : b, long = a.n <= b.n ? b : a;
+    return short.n >= 3 && sharedWords(short, long) === short.n;
+  }
   var shared = sharedWords(a, b);
   return shared >= RELATED_WORDS && shared / Math.min(a.n, b.n) >= RELATED_SHARE;
 }
@@ -1818,7 +1823,23 @@ function withinDay(x, y) {
 // found both: an AI search line, a firm name, a one-off search. The AI Wire on a firm copy has
 // no tracked AI topics, so without the search tags every rewrite of "OpenAI halts training"
 // stood on its own.
+// On the AI Wire every story is about AI, and one event answers several search lines (Bill
+// Gates on a kill switch answers the kill switch line and the AI safety line), so the headline
+// words decide, with one guard: two headlines that each name a company and share none are two
+// stories, however many words they share (Nvidia's kill switch is not Anthropic's).
+var AI_ORGS = /\b(openai|anthropic|xai|nvidia|google|deepmind|meta|microsoft|apple|amazon|tesla|mistral|perplexity|character\.?ai)\b/gi;
+function orgsIn(item) {
+  var found = {}, m, text = itemText(item);
+  AI_ORGS.lastIndex = 0;
+  while ((m = AI_ORGS.exec(text))) found[m[1].toLowerCase()] = 1;
+  return Object.keys(found);
+}
 function shareTopic(x, y) {
+  if (x.channel === "ai" && y.channel === "ai") {
+    var ox = orgsIn(x), oy = orgsIn(y);
+    if (!ox.length || !oy.length) return true;
+    return ox.some(function (o) { return oy.indexOf(o) !== -1; });
+  }
   var a = tagsOf(x), b = tagsOf(y);
   for (var i = 0; i < a.length; i++) if (b.indexOf(a[i]) !== -1) return true;
   return false;
@@ -1862,6 +1883,9 @@ function foldVersions(list) {
       [it.source].concat(it.moreSources || []).forEach(function (s) {
         if (s && e.sources.indexOf(s) === -1) e.sources.push(s);
       });
+      // Still compared against later copies, so a headline that matches this one and not the
+      // root ("Bill Gates on an AI kill switch") joins the same story.
+      kept.push({ tok: tok, item: it, cluster: cluster });
       return;
     }
     if (cluster) cluster.shown++;
@@ -1885,8 +1909,9 @@ function mergeChannel(results, ch) {
       var tok = titleTokens(it.title);
       for (var k = 0; k < kept.length; k++) {
         if (!sameStory(tok, kept[k].tok)) continue;
-        // Keep the first copy and give it the tags the later copies arrived with.
-        var first = kept[k].item;
+        // Keep the first copy and give it the tags the later copies arrived with. A match on a
+        // folded copy counts on the copy shown for its story.
+        var first = kept[k].cluster.root;
         (it.matched || []).forEach(function (t) {
           if (first.matched.indexOf(t) === -1) first.matched.push(t);
         });
@@ -1917,6 +1942,7 @@ function mergeChannel(results, ch) {
         it.watch.forEach(function (t) { if (root.watch.indexOf(t) === -1) root.watch.push(t); });
         if (it.direct) root.direct = true;
         noteVersion(root, it);
+        kept.push({ tok: tok, item: it, cluster: cluster });
         return;
       }
       if (cluster) cluster.shown++;
