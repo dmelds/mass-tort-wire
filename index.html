@@ -1698,7 +1698,7 @@ function fetchIntel() {
 function fetchAI() {
   return Promise.allSettled([
     runBatches(topicSearches("ai"), 10),
-    runBatches(aiSearches(), 6),
+    runBatches(aiSearches(), 10),
     runBatches(settings.aiFeeds, 8)
   ])
     .then(function (results) { return mergeChannel(results, "ai"); });
