@@ -159,6 +159,7 @@
   .notice button { background: none; border: 1px solid var(--ink); color: var(--ink); padding: 5px 9px; font-size: 10px; margin-left: 8px; }
   .day { display: flex; justify-content: space-between; align-items: baseline; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; padding: 22px 0 6px; border-bottom: 1px solid var(--ink); }
   .day .n { color: var(--dim); }
+  .day.offtopic { margin-top: 32px; border-bottom-color: var(--dim); color: var(--dim); }
 
   .item { display: block; padding: 12px 0 12px 12px; border-bottom: 1px solid var(--rule); border-left: 3px solid var(--rule); text-decoration: none; color: var(--ink); }
   .item:active { background: var(--panel); }
@@ -2231,7 +2232,7 @@ function renderFeed() {
   var untagged = passed.filter(function (i) { return !googleStoryOk(i); });
   // MY TOPICS ONLY already hides every untagged story, so the SHOW line would reveal nothing.
   var untaggedCount = settings.topicsOnly ? 0 : untagged.filter(function (i) { return inTab(i, filter); }).length;
-  var shown = showUntagged ? passed : passed.filter(googleStoryOk);
+  var shown = passed.filter(googleStoryOk);
 
   // MY TOPICS ONLY keeps a story when it names one of your tracked topics, or when a firm name
   // search found it and the story names that firm: firm news (a founder's obituary, a sponsorship
@@ -2284,7 +2285,7 @@ function renderFeed() {
 
   if (scanned && untaggedCount) {
     html += '<div class="notice">' + (showUntagged
-      ? 'SHOWING ' + untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + '<button data-act="untagged">HIDE</button>'
+      ? untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + ' LISTED AT THE END OF THE FEED<button data-act="untagged">HIDE</button>'
       : untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + ' HIDDEN<button data-act="untagged">SHOW</button>') + '</div>';
   }
 
@@ -2314,24 +2315,19 @@ function renderFeed() {
   visible.forEach(function (i) { var d = dayOf(i); dayCounts[d] = (dayCounts[d] || 0) + 1; });
   var lastDay = null;
 
-  visible.forEach(function (item) {
-    var day = dayOf(item);
-    if (day !== lastDay) {
-      html += '<div class="day"><span>' + esc(dayLabel(day)) + '</span><span class="n">' + dayCounts[day] + '</span></div>';
-      lastDay = day;
-    }
+  function itemHtml(item, extra) {
     var watch = item.watch || [];
     var tags = tagsOf(item).map(function (t) {
       return '<span class="tag' + (watch.indexOf(t) !== -1 ? ' firm' : '') + '">' + esc(tagLabel(t)) + '</span>';
     }).join("");
     var c = chan(item);
     var when = timeLabel(item);
-    var ex = folded.extra[item.url];
+    var ex = extra[item.url];
     var more = (item.more || 0) + (ex ? ex.n : 0);
     var moreSources = (item.moreSources || []).slice();
     if (ex) ex.sources.forEach(function (s) { if (moreSources.indexOf(s) === -1) moreSources.push(s); });
     var own = OWN_SITE.test(hostOfUrl(item.url));
-    html += '<a class="item ' + esc(c) + '" href="' + esc(storyHref(item.url)) + '" target="_blank" rel="' + (own ? "noopener" : "noopener noreferrer") + '" data-tab="' + esc(c) + '">'
+    return '<a class="item ' + esc(c) + '" href="' + esc(storyHref(item.url)) + '" target="_blank" rel="' + (own ? "noopener" : "noopener noreferrer") + '" data-tab="' + esc(c) + '">'
       + '<div class="src">' + CHANNELS[c] + ' \u00B7 ' + esc(item.source || "\u2014")
       + (when ? ' \u00B7 ' + esc(when) : '')
       + (more ? ' \u00B7 <span class="more" title="' + esc(moreSources.join(", ")) + '">+'
@@ -2341,7 +2337,24 @@ function renderFeed() {
       + (item.summary ? '<p class="sum">' + highlight(item.summary, words) + '</p>' : '')
       + (tags ? '<div class="tags">' + tags + '</div>' : '')
       + '</a>';
+  }
+
+  visible.forEach(function (item) {
+    var day = dayOf(item);
+    if (day !== lastDay) {
+      html += '<div class="day"><span>' + esc(dayLabel(day)) + '</span><span class="n">' + dayCounts[day] + '</span></div>';
+      lastDay = day;
+    }
+    html += itemHtml(item, folded.extra);
   });
+
+  // The off-topic stories, on request, as their own section under the feed rather than mixed
+  // into the days, so a reader can tell which ones the wire set aside.
+  if (showUntagged && untaggedCount) {
+    var offFolded = foldVersions(untagged.filter(function (i) { return inTab(i, filter) && matches(i); }));
+    html += '<div class="day offtopic"><span>OFF-TOPIC \u00B7 NO TOPIC NAMED</span><span class="n">' + offFolded.list.length + '</span></div>';
+    offFolded.list.forEach(function (item) { html += itemHtml(item, offFolded.extra); });
+  }
 
   document.getElementById("feed").innerHTML = html;
 }
