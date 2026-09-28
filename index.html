@@ -712,6 +712,10 @@ function pushSettings() {
     headers: { "Content-Type": "application/json" },
     body: body
   }, 8000).then(function (res) {
+    if (res.status === 403) {
+      setSync("This key can read the wire but not change its shared setup. Your change stays in this window until you reload.", true);
+      return;
+    }
     if (!res.ok) throw new Error("HTTP " + res.status);
     lastSynced = body;
     setSync("Saved to the site. Every window, private ones included, loads this setup.");
