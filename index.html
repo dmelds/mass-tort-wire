@@ -331,7 +331,7 @@ var SETTINGS_VERSION = 17;
 // AI searches, never receives this wire's topic additions on a version bump, and keeps
 // the firm's own AI searches across bumps. The blocked lists, the trusted sources and
 // TOPIC_RULES are shared, since they are filter hygiene rather than a topic list.
-var FIRM_BUILD = false;
+var FIRM_BUILD = true;
 // The ways a headline says a price moved. One rule, since a blocked word can list choices
 // with a slash: "stock/share + jump/fall" hides "Bayer shares fall" and "Bayer stock jumps".
 var STOCK_MOVES = "jump/fall/fell/drop/dropped/rise/rose/slide/slid/surge/plunge/tumble/soar/rally/rallied/climb/sink/sank/slump/dip/dipped/gain/tank/rebound/dive/spike/slip/slipped/skid/skidded/mover/trading/ticker/upgrade/downgrade/valuation/investor/analyst";
