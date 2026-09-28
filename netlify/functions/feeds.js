@@ -1,3 +1,6 @@
+// Mass Tort Wire. Copyright (c) 2026 David Meldofsky. All rights reserved.
+// No license is granted to copy, modify or redistribute this code.
+
 // News Wire + Firm Wire: fetches RSS/Atom feeds server-side (browsers can't, due to CORS).
 // No API key required.
 //
