@@ -1871,6 +1871,9 @@ function foldVersions(list) {
     if (!isDigestTitle(it.title)) {
       for (var j = 0; j < kept.length; j++) {
         if (isDigestTitle(kept[j].item.title)) continue;
+        // A folded copy attracts only a short headline that fits inside it. A full match has to
+        // be with a copy that is shown, or one story would swallow its neighbours copy by copy.
+        if (kept[j].folded && tok.n >= 5 && kept[j].tok.n >= 5) continue;
         if (!relatedStory(tok, kept[j].tok)) continue;
         if (!withinDay(it, kept[j].item) || !shareTopic(it, kept[j].item)) continue;
         cluster = kept[j].cluster;
@@ -1883,9 +1886,9 @@ function foldVersions(list) {
       [it.source].concat(it.moreSources || []).forEach(function (s) {
         if (s && e.sources.indexOf(s) === -1) e.sources.push(s);
       });
-      // Still compared against later copies, so a headline that matches this one and not the
-      // root ("Bill Gates on an AI kill switch") joins the same story.
-      kept.push({ tok: tok, item: it, cluster: cluster });
+      // Still compared against later short headlines, so "Bill Gates on an AI kill switch"
+      // joins the story through this copy when it does not match the shown one.
+      kept.push({ tok: tok, item: it, cluster: cluster, folded: true });
       return;
     }
     if (cluster) cluster.shown++;
@@ -1931,6 +1934,7 @@ function mergeChannel(results, ch) {
       // dropped and the first copy carries its tags and a count of the versions it stands for.
       var cluster = null;
       for (var j = 0; j < kept.length; j++) {
+        if (kept[j].folded && tok.n >= 5 && kept[j].tok.n >= 5) continue;
         if (!relatedStory(tok, kept[j].tok)) continue;
         if (!withinDay(it, kept[j].item) || !shareTopic(it, kept[j].item)) continue;
         cluster = kept[j].cluster;
@@ -1942,7 +1946,7 @@ function mergeChannel(results, ch) {
         it.watch.forEach(function (t) { if (root.watch.indexOf(t) === -1) root.watch.push(t); });
         if (it.direct) root.direct = true;
         noteVersion(root, it);
-        kept.push({ tok: tok, item: it, cluster: cluster });
+        kept.push({ tok: tok, item: it, cluster: cluster, folded: true });
         return;
       }
       if (cluster) cluster.shown++;
