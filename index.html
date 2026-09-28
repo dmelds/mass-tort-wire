@@ -1279,8 +1279,11 @@ var TOPIC_RULES = {
   // "litigation funding" loses "litigation" to coreTerm, so the topic is named third-party litigation
   // funding and its press names carry the rest.
   "third-party funding": {
-    names: ["litigation funding", "litigation finance", "litigation funder", "litigation financier", "legal funding",
-            "tplf", "burford", "lawsuit funding", "pre-settlement funding"]
+    names: ["litigation funding", "litigation finance", "litigation funder", "litigation funders", "litigation financier",
+            "legal funding", "legal funder", "legal funders", "tplf", "burford", "fortress investment", "omni bridgeway",
+            "lawsuit funding", "pre-settlement funding", "third-party litigation", "third party litigation",
+            "third-party funding", "third party funding", "portfolio financing", "portfolio funding", "funded claims",
+            "funding agreement", "funding agreements", "litigation investment", "litigation investor", "litigation investors"]
   },
   // Deepfake news is mostly politics and scams, so the name needs a civil-suit or statute word.
   "deepfake": {
@@ -1956,6 +1959,10 @@ function mergeChannel(results, ch) {
       it.matched = it.matched || [];
       it.watch = it.watch || [];
       it.channel = ch;   // set now: the version span below depends on the channel
+      // A title that arrived URL-encoded, plus signs for spaces and %2C for commas.
+      if (/^\S+$/.test(it.title || "") && (it.title.match(/\+/g) || []).length >= 3) {
+        try { it.title = decodeURIComponent(it.title.replace(/\+/g, " ")); } catch (e) { it.title = it.title.replace(/\+/g, " "); }
+      }
 
       // A looser match is a version of a story already kept. Past the cap the copy is
       // dropped and the first copy carries its tags and a count of the versions it stands for.
@@ -2281,7 +2288,12 @@ function isLegalNews(item) {
   return AI_LEGAL.test(text) || NEWS_LEGAL.test(text);
 }
 function googleStoryOk(item) {
-  if (item.channel !== "news" || item.direct) return true;
+  if (item.direct) return true;
+  // The middle tab (INTELLIGENCER, or DEAL WIRE on a firm copy) runs beat searches whose results
+  // are nearly all legal news, so a legal word proves nothing there: a story stays when it
+  // proves a beat, and "Boston sues DOT over EV chargers" goes behind OFF-TOPIC.
+  if (item.channel === "intel") return tagsOf(item).length > 0;
+  if (item.channel !== "news") return true;
   return tagsOf(item).length > 0 || isLegalNews(item);
 }
 
