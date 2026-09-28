@@ -177,6 +177,7 @@
   .item .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .item .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); border: 1px solid var(--rule); padding: 2px 6px; }
   .item .tag.firm { color: var(--firms); border-color: var(--firms); }
+  .item .tag.why { color: var(--bad); border-color: var(--bad); }
 
   footer { border-top: 1px solid var(--rule); padding: 16px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); line-height: 1.6; }
 
@@ -244,7 +245,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit = Gramoxone">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search over the window plus one over the last 24 hours, up to 20 topics. A story counts for a topic when its headline or summary names it. Give the other names the press uses after an equals sign, separated by commas: <b>talc lawsuit = talcum powder, baby powder</b>. The stock topics already carry their names, so asbestos catches mesothelioma and PFAS catches forever chemicals. AI topics show in the AI Wire and Intelligencer topics in INTELLIGENCER. NEWS WIRE shows all of them. On a firm copy, a Google News result that names no topic and no watched firm stays on the wire only when it reads as legal news; the rest sit behind an OFF-TOPIC line with a SHOW button.</p>
+  <p class="hint">Each topic runs as a Google News search over the window plus one over the last 24 hours, up to 20 topics. A story counts for a topic when its headline or summary names it. Give the other names the press uses after an equals sign, separated by commas: <b>talc lawsuit = talcum powder, baby powder</b>. The stock topics already carry their names, so asbestos catches mesothelioma and PFAS catches forever chemicals. AI topics show in the AI Wire and Intelligencer topics in INTELLIGENCER. NEWS WIRE shows all of them. A Google News result that names no topic and no watched firm stays on the wire only when it reads as legal news; the rest sit behind an OFF-TOPIC line with a SHOW button.</p>
 
   <div class="label">FIRMS TO WATCH (ONE PER LINE)</div>
   <textarea id="firmWatchInput" rows="6"></textarea>
@@ -265,7 +266,7 @@
 
   <div class="label">AI SEARCHES (ONE PER LINE)</div>
   <textarea id="aiSearchInput" rows="8"></textarea>
-  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. Quotes force a word to appear, and intitle: forces it into the headline. Google News ignores allintitle:. On a firm copy the AI Wire keeps only AI news about law; start a line with * to keep everything that line returns.</p>
+  <p class="hint">Each line runs as its own Google News search for the AI Wire and tags whatever it returns. Quotes force a word to appear, and intitle: forces it into the headline. Google News ignores allintitle:. The AI Wire keeps only AI news about law; start a line with * to keep everything that line returns, for AI safety and policy news.</p>
 
   <div class="label">AI FEEDS (ONE PER LINE)</div>
   <textarea id="aiFeedsInput" rows="3"></textarea>
@@ -330,7 +331,7 @@ var SETTINGS_VERSION = 17;
 // AI searches, never receives this wire's topic additions on a version bump, and keeps
 // the firm's own AI searches across bumps. The blocked lists, the trusted sources and
 // TOPIC_RULES are shared, since they are filter hygiene rather than a topic list.
-var FIRM_BUILD = true;
+var FIRM_BUILD = false;
 // The ways a headline says a price moved. One rule, since a blocked word can list choices
 // with a slash: "stock/share + jump/fall" hides "Bayer shares fall" and "Bayer stock jumps".
 var STOCK_MOVES = "jump/fall/fell/drop/dropped/rise/rose/slide/slid/surge/plunge/tumble/soar/rally/rallied/climb/sink/sank/slump/dip/dipped/gain/tank/rebound/dive/spike/slip/slipped/skid/skidded/mover/trading/ticker/upgrade/downgrade/valuation/investor/analyst";
@@ -428,7 +429,10 @@ var DEFAULTS = {
     '"hallucinated" OR "fabricated" citations court lawyer',
     '"artificial intelligence" "judiciary"',
     '"AI-generated" evidence court',
-    '"ChatGPT" "lawsuit" teen'
+    '"ChatGPT" "lawsuit" teen',
+    '* intitle:"kill switch" AI OR OpenAI OR Anthropic OR xAI',
+    '* intitle:"pauses training" OR intitle:"halts training" OR intitle:"escaped containment"',
+    '* intitle:"AI safety" Senate OR Congress OR regulators OR lawmakers'
   ],
   aiFeeds: [
     "https://www.lawnext.com/feed",
@@ -717,7 +721,8 @@ var items = [];
 var errors = {};
 var health = { news: [], intel: [], ai: [] };
 var filter = "news";
-var showUntagged = false;   // firm copies: show the Google results that name no topic, on request
+var showUntagged = false;   // show the Google results that name no topic, on request
+var showBlocked = false;    // show the stories the blocked words and firm-name rules hid, on request
 var newOnly = false;    // NEW ONLY toggle: show only stories the last visit had not seen
 var scanned = false;
 var scanning = false;
@@ -1018,6 +1023,7 @@ document.getElementById("topicBar").addEventListener("click", function (e) {
 document.getElementById("feed").addEventListener("click", function (e) {
   var b = e.target.closest("button[data-act]");
   if (!b) return;
+  if (b.getAttribute("data-act") === "blocked") { showBlocked = !showBlocked; renderFeed(); return; }
   if (b.getAttribute("data-act") === "untagged") {
     showUntagged = !showUntagged;
     track("wire_offtopic", { show: showUntagged ? 1 : 0 });
@@ -1179,7 +1185,7 @@ var TOPIC_RULES = {
   "ai chatbot": {
     names: ["character.ai", "ai companion"],
     loose: ["ai chatbot", "chatbot", "chatgpt", "openai", "section 230", "grok", "xai"],
-    context: /\b(deaths?|died|suicide|wrongful|teens?|overdose|minors?|harm|injur\w*|lawsuits?|sued|sues|suing)\b/i
+    context: /\b(deaths?|died|suicide|wrongful|teens?|overdose|minors?|harm|injur\w*|lawsuits?|sued|sues|suing|injunction\w*|restrain\w*|restrict\w*|attorney general|attorneys general|court)\b/i
   },
   // Litigation practice only: sanctions, hallucinated citations, AI in filings, briefs, depositions
   // and evidence, plus courts issuing AI rules. "AI" next to a bare "court" or "judge" pulled in
@@ -1235,7 +1241,8 @@ var TOPIC_RULES = {
     loose: ["state attorney general", "state attorneys general", "attorney general", "attorneys general", "ag", "ags"],
     context: new RegExp(
       "^(?!.*\\b(" + AG_FEDERAL + ")\\b)" +
-      "(?=.*\\b(sues?|sued|suing|lawsuits?|complaint|subpoena\\w*|investigat\\w*|settle\\w*|" +
+      "(?=.*\\b(sues?|sued|suing|lawsuits?|complaint|subpoena\\w*|investigat\\w*|settle\\w*|injunction\\w*|" +
+      "emergency order|restraining order|asks? (a |the )?court|seeks? (a |an |the )?(court )?order|" +
       "civil investigative demand|cease[- ]and[- ]desist|enforcement|trials?|jury|jurors|verdicts?|civil penalt\\w*)\\b)" +
       "(?=.*\\b(consumers?|deceptive|deceiv\\w*|unfair|fraud\\w*|mislead\\w*|misled|safety|harm\\w*|child\\w*|kids|teens?|minors|" +
       "health|cancer|pfas|chemicals?|pollut\\w*|contaminat\\w*|opioids?|drugs?|products?|addict\\w*|privacy|" +
@@ -1390,11 +1397,14 @@ function chan(item) {
 
 // NEWS WIRE carries all the news: every story from every tab, except AI Wire items that cover none
 // of your tracked topics, which are legal tech posts and AI-in-law commentary rather than news.
-// INTELLIGENCER and AI WIRE each keep only their own stories.
+// INTELLIGENCER and AI WIRE each keep their own stories, plus any story that proves one of their
+// topics whichever channel fetched it: Florida's injunction against OpenAI proves the state
+// attorney general beat and the AI chatbot topic, so it shows on both tabs.
 function inTab(item, tab) {
   var c = chan(item);
   if (tab === "news") return c !== "ai" || topicsOf(item).length > 0 || isOwnAiStory(item);
-  return c === tab;
+  if (c === tab) return true;
+  return topicsOf(item).some(function (t) { return topicTab(t) === tab; });
 }
 
 // Tags shown on a story: firms it names, topics it proves, and the AI search or one-off
@@ -1597,6 +1607,13 @@ var TOPIC_PAIRS = ["settlement", "lawsuit", "litigation", "MDL", "verdict", "tri
 // Unfair Practices Act", so "state attorney general lawsuit" missed AP's Facebook trial story.
 // Google News searches the article body, so the statute names find it.
 var EXTRA_SEARCHES = {
+  // A state suing or restraining an AI company. The "AI chatbot" search fills its cap with the
+  // day's biggest AI story, and the attorney general searches below ask for trial words, so on
+  // 9/28/26 Florida's injunction against OpenAI reached neither. This search asks for it by name.
+  "ai chatbot": [
+    '("attorney general" OR "attorneys general" OR "the state") (OpenAI OR ChatGPT OR Anthropic OR "Character.AI" OR Meta OR Snap OR Roblox OR TikTok) ' +
+      '(sues OR lawsuit OR injunction OR "emergency order" OR complaint OR settlement OR subpoena)'
+  ],
   "state attorney general": [
     '("Unfair Practices Act" OR "Deceptive Trade Practices Act" OR "Consumer Protection Act" OR "Consumer Fraud Act" OR ' +
       '"Unfair Trade Practices") (trial OR jury OR jurors OR verdict OR sues OR lawsuit)',
@@ -1715,7 +1732,7 @@ function fetchNews() {
   var searches = topicSearches("");
   return Promise.allSettled([
     runBatches(searches, 10),
-    runBatches(settings.newsFeeds, 8).then(markDirect),
+    runBatches(settings.newsFeeds.concat(OWN_NEWS_FEEDS), 8).then(markDirect),
     runBatches(outletSearches(), 10),
     runBatches(settings.firmFeeds, 8).then(markDirect),
     runBatches(firmSearches(), 6)
@@ -1740,8 +1757,19 @@ function aiSearches() {
   }));
 }
 
+// Your own wire reads the network's feeds directly, so an Intelligencer piece lands on the
+// INTELLIGENCER tab and an Informer update on the News Wire the day they publish, whether or not
+// Google News has picked them up. A firm copy carries both feeds in its settings instead.
+var OWN_INTEL_FEEDS = FIRM_BUILD ? [] : ["https://lawsuitintelligencer.com/feed.xml"];
+var OWN_NEWS_FEEDS = FIRM_BUILD ? [] : ["https://lawsuitinformer.com/feed.xml"];
+
+// Intelligencer searches keep 15 results a feed rather than 10: nine beats over seven days,
+// ranked by relevance, left Tuesday and Wednesday empty at 10.
 function fetchIntel() {
-  return Promise.allSettled([runBatches(topicSearches("intel"), 10)])
+  return Promise.allSettled([
+    runBatches(topicSearches("intel"), 15),
+    runBatches(OWN_INTEL_FEEDS, 8).then(markDirect)
+  ])
     .then(function (results) { return mergeChannel(results, "intel"); });
 }
 
@@ -1819,10 +1847,6 @@ function withinDay(x, y) {
   if (!x.date || !y.date) return false;
   return Math.abs(new Date(x.date) - new Date(y.date)) <= versionSpan(x, y) * 86400000;
 }
-// Two copies share a topic when they prove the same tracked topic, or when the same search
-// found both: an AI search line, a firm name, a one-off search. The AI Wire on a firm copy has
-// no tracked AI topics, so without the search tags every rewrite of "OpenAI halts training"
-// stood on its own.
 // On the AI Wire every story is about AI, and one event answers several search lines (Bill
 // Gates on a kill switch answers the kill switch line and the AI safety line), so the headline
 // words decide, with one guard: two headlines that each name a company and share none are two
@@ -1840,7 +1864,10 @@ function shareTopic(x, y) {
     if (!ox.length || !oy.length) return true;
     return ox.some(function (o) { return oy.indexOf(o) !== -1; });
   }
-  var a = tagsOf(x), b = tagsOf(y);
+  // Elsewhere two copies have to prove the same tracked topic. Sharing a search is not enough:
+  // every state AG suit answers the attorney general search and reads "attorney general sues",
+  // so on the search tag alone the Intelligencer tab folded different suits into one story.
+  var a = topicsOf(x), b = topicsOf(y);
   for (var i = 0; i < a.length; i++) if (b.indexOf(a[i]) !== -1) return true;
   return false;
 }
@@ -2132,10 +2159,27 @@ function blockedRules() {
   var key = settings.blockedTerms.join("\n");
   if (blockedCache.key === key) return blockedCache.rules;
   var rules = settings.blockedTerms.map(function (t) {
-    return t.split("+").map(function (w) { return w.trim(); }).filter(Boolean).map(wordRx);
+    var r = t.split("+").map(function (w) { return w.trim(); }).filter(Boolean).map(wordRx);
+    r.term = t;
+    return r;
   }).filter(function (r) { return r.length; });
   blockedCache = { key: key, rules: rules };
   return rules;
+}
+
+// Why a story is off the feed, for the HIDDEN list: the blocked word that caught it, or the
+// rule that set it aside.
+function hiddenReason(item) {
+  var text = itemText(item);
+  for (var i = 0, rules = blockedRules(); i < rules.length; i++) {
+    if (rules[i].every(function (re) { return re.test(text); })) {
+      var term = rules[i].term;
+      return "BLOCKED WORD: " + (term.length > 40 ? term.slice(0, 37) + "\u2026" : term);
+    }
+  }
+  if (!aiStoryOk(item)) return "NO LEGAL ANGLE IN THE HEADLINE";
+  if (!firmStoryOk(item)) return "FIRM NOT NAMED IN THE HEADLINE";
+  return "";
 }
 
 function isBlocked(item) {
@@ -2201,7 +2245,7 @@ function fromTrusted(item) {
 // fiction. A story on the AI Wire stays when its headline or summary is about law or legal work,
 // or when it proves one of your topics. A trusted source gets no pass here: Reuters runs plenty
 // of AI business news.
-var AI_LEGAL = /\b(law|laws|legal|lawyers?|attorneys?|law\s*firms?|courts?|judges?|judicial|judiciary|jur(y|ors?)|trials?|lawsuits?|su(ed|es|ing)|litigat\w*|plaintiffs?|defendants?|settle(d|s|ment|ments)?|class\s+actions?|claims?|claimants?|verdicts?|rulings?|ruled|sanction(s|ed)?|hallucinat\w*|citations?|filings?|briefs?|depositions?|evidence|discovery|e-?discovery|mdl|regulators?|attorney\s+general|ftc|bar\s+association|paralegals?|legal\s*tech|legaltech|patents?|intellectual\s+property)\b/i;
+var AI_LEGAL = /\b(law|laws|legal|lawyers?|attorneys?|law\s*firms?|courts?|judges?|judicial|judiciary|jur(y|ors?)|trials?|lawsuits?|su(ed|es|ing)|litigat\w*|plaintiffs?|defendants?|settle(d|s|ment|ments)?|class\s+actions?|claims?|claimants?|verdicts?|rulings?|ruled|sanction(s|ed)?|hallucinat\w*|citations?|filings?|briefs?|depositions?|evidence|discovery|e-?discovery|mdl|regulators?|attorney\s+general|ftc|bar\s+association|paralegals?|legal\s*tech|legaltech|patents?|intellectual\s+property|complaints?|sue|criminal|prosecut\w*|charged|arrest\w*|indict\w*|police|probes?|injunction\w*|restrain\w*|emergency\s+order|liable|liability|responsible|deepfakes?|shooters?|shootings?|harms?|minors?)\b/i;
 // An open (*) line keeps a story only when the headline or summary is about AI. Google News
 // matches words anywhere on the page, so a sidebar link reading "AI safety" can pull in an
 // unrelated Bloomberg story.
@@ -2212,9 +2256,8 @@ function isAiStory(item) {
   return AI_CAPS.test(text) || AI_NAMES.test(text);
 }
 function aiStoryOk(item) {
-  // Firm copies only. Your own wire's AI beat includes AI safety and policy news (kill switches,
-  // training pauses, Senate probes) whose headlines carry no legal word, so it takes every result.
-  if (!FIRM_BUILD) return true;
+  // Every build. AI safety and policy news (kill switches, training pauses, Senate probes) comes
+  // in through lines that start with *, which keep everything they return.
   if (item.channel !== "ai") return true;
   if (topicsOf(item).length) return true;
   var open = openAiLines();
@@ -2229,9 +2272,8 @@ function aiStoryOk(item) {
 // when its headline or summary is legal news: AI_LEGAL's words plus NEWS_LEGAL's. Tested on the
 // 62 untagged stories on the Verus wire 9/28/26: kept 26 of 28 real legal stories, dropped 19 of
 // 20 junk ones. The rest stay one tap away behind SHOW.
-//   Site searches (Reuters, Law360, Yahoo) carry no tag of their own: tagged or legal, on every copy.
-//   Topic and firm searches: on a firm copy, tagged or legal. Your own wire keeps them all, as
-//   it always has.
+// The same rule on every build, for site searches (Reuters, Law360, Yahoo) and topic and firm
+// searches alike: tagged or legal, or it goes behind OFF-TOPIC.
 // Feeds you listed (firm blogs, AboutLawsuits) are marked direct on arrival and skip this rule.
 var NEWS_LEGAL = /\b(suits?|llp|mediation|arbitrat\w*|circuit|bankrupt\w*|chapter\s+11|ch\.\s*11|recalls?|recalled|fda|doj|wrongful|negligen\w*|liability|liable|attorney|investigat\w*\s+(into|of)\s+\w+|hit\s+with)\b/i;
 function isLegalNews(item) {
@@ -2240,9 +2282,7 @@ function isLegalNews(item) {
 }
 function googleStoryOk(item) {
   if (item.channel !== "news" || item.direct) return true;
-  if (tagsOf(item).length || isLegalNews(item)) return true;
-  if (!(item.matched && item.matched.length) && !(item.watch && item.watch.length)) return false;
-  return !FIRM_BUILD;
+  return tagsOf(item).length > 0 || isLegalNews(item);
 }
 
 function firmStoryOk(item) {
@@ -2267,7 +2307,10 @@ function renderFeed() {
     return true;
   });
   var passed = unique.filter(function (i) { return !isBlocked(i) && firmStoryOk(i) && aiStoryOk(i); });
-  var hiddenCount = unique.length - passed.length;
+  // The stories the blocked words and firm-name rules hid, counted for the tab on screen and
+  // listed at the end of the feed on request, so a blocked word that bites a real story is seen.
+  var blockedOut = unique.filter(function (i) { return passed.indexOf(i) === -1; });
+  var hiddenCount = blockedOut.filter(function (i) { return inTab(i, filter); }).length;
   // Untagged Google results stay one tap away rather than gone, so a story whose headline words a
   // topic differently can still be read. Counted for the tab on screen.
   var untagged = passed.filter(function (i) { return !googleStoryOk(i); });
@@ -2279,11 +2322,11 @@ function renderFeed() {
   // search found it and the story names that firm: firm news (a founder's obituary, a sponsorship
   // deal) rarely names a tort. An AI search line or a topic search that merely returned the story
   // doesn't count.
-  // On a firm copy the AI Wire has its own filter (aiStoryOk keeps legal AI news only), and AI
-  // stories rarely name a firm's litigations, so MY TOPICS ONLY leaves that tab alone.
+  // The AI Wire has its own filter (aiStoryOk keeps legal AI news and the starred lines), and AI
+  // stories rarely name a tracked litigation, so MY TOPICS ONLY leaves that tab alone.
   var base = settings.topicsOnly
     ? shown.filter(function (i) {
-        if (FIRM_BUILD && chan(i) === "ai") return true;
+        if (chan(i) === "ai") return true;
         return topicsOf(i).length || namesWatchedFirm(i);
       })
     : shown;
@@ -2330,9 +2373,10 @@ function renderFeed() {
       : untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + ' HIDDEN<button data-act="untagged">SHOW</button>') + '</div>';
   }
 
-  if (scanned && hiddenCount && !readOnly) {
-    html += '<div class="notice">' + hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') +
-      ' HIDDEN BY BLOCKED WORDS \u00B7 SEE EDIT SOURCES</div>';
+  if (scanned && hiddenCount) {
+    html += '<div class="notice">' + (showBlocked
+      ? hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') + ' HIDDEN BY YOUR FILTERS, LISTED AT THE END OF THE FEED<button data-act="blocked">HIDE</button>'
+      : hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') + ' HIDDEN BY YOUR FILTERS<button data-act="blocked">SHOW</button>') + '</div>';
   }
 
   document.getElementById("newOnlyBtn").textContent = scanned ? "NEW ONLY (" + newCount + ")" : "NEW ONLY";
@@ -2356,7 +2400,7 @@ function renderFeed() {
   visible.forEach(function (i) { var d = dayOf(i); dayCounts[d] = (dayCounts[d] || 0) + 1; });
   var lastDay = null;
 
-  function itemHtml(item, extra) {
+  function itemHtml(item, extra, note) {
     var watch = item.watch || [];
     var tags = tagsOf(item).map(function (t) {
       return '<span class="tag' + (watch.indexOf(t) !== -1 ? ' firm' : '') + '">' + esc(tagLabel(t)) + '</span>';
@@ -2376,7 +2420,7 @@ function renderFeed() {
       + (isNew(item) ? '<span class="new">NEW</span>' : '') + '</div>'
       + '<div class="title">' + highlight(item.title, words) + '</div>'
       + (item.summary ? '<p class="sum">' + highlight(item.summary, words) + '</p>' : '')
-      + (tags ? '<div class="tags">' + tags + '</div>' : '')
+      + (tags || note ? '<div class="tags">' + tags + (note ? '<span class="tag why">' + esc(note) + '</span>' : '') + '</div>' : '')
       + '</a>';
   }
 
@@ -2395,6 +2439,11 @@ function renderFeed() {
     var offFolded = foldVersions(untagged.filter(function (i) { return inTab(i, filter) && matches(i); }));
     html += '<div class="day offtopic"><span>OFF-TOPIC \u00B7 NO TOPIC NAMED</span><span class="n">' + offFolded.list.length + '</span></div>';
     offFolded.list.forEach(function (item) { html += itemHtml(item, offFolded.extra); });
+  }
+  if (showBlocked && hiddenCount) {
+    var blkFolded = foldVersions(blockedOut.filter(function (i) { return inTab(i, filter) && matches(i); }));
+    html += '<div class="day offtopic"><span>HIDDEN BY YOUR FILTERS \u00B7 EACH SHOWS WHY</span><span class="n">' + blkFolded.list.length + '</span></div>';
+    blkFolded.list.forEach(function (item) { html += itemHtml(item, blkFolded.extra, hiddenReason(item)); });
   }
 
   document.getElementById("feed").innerHTML = html;
