@@ -1303,8 +1303,16 @@ function syncMiddleTab() {
   if (!show && filter === "intel") document.querySelector('.filters button[data-f="news"]').click();
 }
 
+// Lawsuit Intelligencer's AI coverage arrives through its News Wire feed. An Intelligencer
+// article that is about AI shows on the AI Wire as well; the rest stay on the News Wire.
+var OWN_AI_SITE = /(^|\.)lawsuitintelligencer\.com$/i;
+function isOwnAiStory(item) {
+  return OWN_AI_SITE.test(hostOfUrl(item.url || "")) && AI_WORDS.test(itemText(item));
+}
+
 function chan(item) {
   if (item.channel === "ai") return "ai";
+  if (isOwnAiStory(item)) return "ai";
   var tabs = topicsOf(item).map(topicTab);
   if (tabs.indexOf("ai") !== -1) return "ai";
   if (item.channel === "intel" || tabs.indexOf("intel") !== -1) return "intel";
@@ -1316,7 +1324,7 @@ function chan(item) {
 // INTELLIGENCER and AI WIRE each keep only their own stories.
 function inTab(item, tab) {
   var c = chan(item);
-  if (tab === "news") return c !== "ai" || topicsOf(item).length > 0;
+  if (tab === "news") return c !== "ai" || topicsOf(item).length > 0 || isOwnAiStory(item);
   return c === tab;
 }
 
