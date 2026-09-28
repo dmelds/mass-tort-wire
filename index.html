@@ -2115,8 +2115,13 @@ function renderFeed() {
   // search found it and the story names that firm: firm news (a founder's obituary, a sponsorship
   // deal) rarely names a tort. An AI search line or a topic search that merely returned the story
   // doesn't count.
+  // On a firm copy the AI Wire has its own filter (aiStoryOk keeps legal AI news only), and AI
+  // stories rarely name a firm's litigations, so MY TOPICS ONLY leaves that tab alone.
   var base = settings.topicsOnly
-    ? shown.filter(function (i) { return topicsOf(i).length || namesWatchedFirm(i); })
+    ? shown.filter(function (i) {
+        if (FIRM_BUILD && chan(i) === "ai") return true;
+        return topicsOf(i).length || namesWatchedFirm(i);
+      })
     : shown;
   var pool = newOnly ? base.filter(isNew) : base;
 
