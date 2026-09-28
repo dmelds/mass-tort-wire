@@ -243,7 +243,7 @@
     <input type="text" id="topicInput" placeholder="Add topic, e.g. paraquat lawsuit = Gramoxone">
     <button class="add-btn" id="addTopic">ADD</button>
   </div>
-  <p class="hint">Each topic runs as a Google News search over the window plus one over the last 24 hours, up to 20 topics. A story counts for a topic when its headline or summary names it. Give the other names the press uses after an equals sign, separated by commas: <b>talc lawsuit = talcum powder, baby powder</b>. The stock topics already carry their names, so asbestos catches mesothelioma and PFAS catches forever chemicals. AI topics show in the AI Wire and Intelligencer topics in INTELLIGENCER. NEWS WIRE shows all of them. On a firm copy, a Google News result that names no topic and no watched firm stays on the wire only when it reads as legal news; the rest sit behind an OFF-TOPIC line with a SHOW button.</p>
+  <p class="hint">Each topic runs as a Google News search over the window plus one over the last 24 hours, up to 20 topics. A story counts for a topic when its headline or summary names it. Give the other names the press uses after an equals sign, separated by commas: <b>talc lawsuit = talcum powder, baby powder</b>. The stock topics already carry their names, so asbestos catches mesothelioma and PFAS catches forever chemicals. AI topics show in the AI Wire and Intelligencer topics in INTELLIGENCER. NEWS WIRE shows all of them.</p>
 
   <div class="label">FIRMS TO WATCH (ONE PER LINE)</div>
   <textarea id="firmWatchInput" rows="6"></textarea>
@@ -317,7 +317,7 @@
 
 <footer>
   MASS TORT WIRE IS BUILT AND MAINTAINED BY DAVID MELDOFSKY, PUBLISHER OF <a href="https://lawsuitintelligencer.com/?utm_source=masstortwire&amp;utm_medium=referral&amp;utm_campaign=footer" target="_blank" rel="noopener">LAWSUIT INTELLIGENCER</a> AND <a href="https://lawsuitinformer.com/?utm_source=masstortwire&amp;utm_medium=referral&amp;utm_campaign=footer" target="_blank" rel="noopener">LAWSUIT INFORMER</a>. &copy; 2026 DAVID MELDOFSKY. ALL RIGHTS RESERVED.<br>
-  NEWS WIRE: EVERY STORY ON THE WIRE, GROUPED BY DAY &middot; NEW: ARRIVED IN THE LAST 24 HOURS &middot; INTELLIGENCER: STORIES ON LAWSUIT INTELLIGENCER'S BEATS &middot; AI WIRE: AI TOPICS, AI-IN-LAW SEARCHES AND LEGAL TECH FEEDS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
+  NEWS WIRE: EVERY STORY ON THE WIRE, GROUPED BY DAY &middot; NEW: REACHED THIS DEVICE IN THE LAST 24 HOURS &middot; INTELLIGENCER: STORIES ON LAWSUIT INTELLIGENCER'S BEATS &middot; AI WIRE: AI TOPICS, AI-IN-LAW SEARCHES AND LEGAL TECH FEEDS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
@@ -1017,12 +1017,8 @@ document.getElementById("topicBar").addEventListener("click", function (e) {
 document.getElementById("feed").addEventListener("click", function (e) {
   var b = e.target.closest("button[data-act]");
   if (!b) return;
-  if (b.getAttribute("data-act") === "untagged") {
-    showUntagged = !showUntagged;
-    track("wire_offtopic", { show: showUntagged ? 1 : 0 });
-    renderFeed();
-    return;
-  }
+  if (b.getAttribute("data-act") === "newonly") { setNewOnly(!newOnly); return; }
+  if (b.getAttribute("data-act") === "untagged") { showUntagged = !showUntagged; renderFeed(); return; }
   var q = query.trim();
   if (!q) return;
   if (b.getAttribute("data-act") === "gnews") searchGoogleNews(q);
@@ -1285,7 +1281,7 @@ var TOPIC_RULES = {
 // "Roundup" also names a news digest: "UK Litigation Roundup: Here's What You Missed",
 // "Pennsylvania Roundup: Coalition secures settlement". The digest form is a heading followed by
 // a colon, or a word like Litigation or Weekly in front. Those don't count as the herbicide.
-var DIGEST_BEFORE = /\b(litigation|legal|law|news|weekly|daily|week|morning|evening|friday|monday|state|regional|review|reviews|sports|nfl|nba|mlb|nhl|wta|atp|tennis|golf|tech|gaming)\s+roundups?\b/i;
+var DIGEST_BEFORE = /\b(litigation|legal|law|news|weekly|daily|week|morning|evening|friday|monday|state|regional)\s+roundups?\b/i;
 var DIGEST_AFTER = /\broundups?\s*:/i;
 
 function namesRx(names) {
@@ -1703,20 +1699,13 @@ function topicSearches(tab) {
 
 // The News Wire also carries the firm watch: firm name searches and firm blog feeds. Merging them
 // in one channel lets a firm's post and the press story about it collapse into one item.
-// A story from a feed you listed (a firm blog, AboutLawsuits, a site's own RSS) is there because
-// you asked for that feed, so it never has to prove itself the way a Google News result does.
-function markDirect(res) {
-  res.items.forEach(function (it) { it.direct = true; });
-  return res;
-}
-
 function fetchNews() {
   var searches = topicSearches("");
   return Promise.allSettled([
     runBatches(searches, 10),
-    runBatches(settings.newsFeeds, 8).then(markDirect),
+    runBatches(settings.newsFeeds, 8),
     runBatches(outletSearches(), 10),
-    runBatches(settings.firmFeeds, 8).then(markDirect),
+    runBatches(settings.firmFeeds, 8),
     runBatches(firmSearches(), 6)
   ])
     .then(function (results) { return mergeChannel(results, "news"); });
@@ -1882,7 +1871,6 @@ function mergeChannel(results, ch) {
         (it.watch || []).forEach(function (t) {
           if (first.watch.indexOf(t) === -1) first.watch.push(t);
         });
-        if (it.direct) first.direct = true;
         noteVersion(first, it);
         return;
       }
@@ -1903,7 +1891,6 @@ function mergeChannel(results, ch) {
         var root = cluster.root;
         it.matched.forEach(function (t) { if (root.matched.indexOf(t) === -1) root.matched.push(t); });
         it.watch.forEach(function (t) { if (root.watch.indexOf(t) === -1) root.watch.push(t); });
-        if (it.direct) root.direct = true;
         noteVersion(root, it);
         return;
       }
@@ -1963,8 +1950,7 @@ function runScan() {
   Promise.allSettled([
     run("news", fetchNews), run("intel", fetchIntel), run("ai", fetchAI)
   ]).then(function () {
-    // A first scan that failed wrote no stamps, so the next scan is still the first.
-    if (Object.keys(firstSeen).length) freshDevice = false;
+    freshDevice = false;
     scanning = false;
     btn.disabled = false;
     btn.textContent = "RUN SCAN";
@@ -2164,10 +2150,10 @@ var AI_LEGAL = /\b(law|laws|legal|lawyers?|attorneys?|law\s*firms?|courts?|judge
 // matches words anywhere on the page, so a sidebar link reading "AI safety" can pull in an
 // unrelated Bloomberg story.
 var AI_CAPS = /\bA\.?I\.?\b|\bAGI\b|\bLLMs?\b|\bGPT/;
-var AI_NAMES = /\b(artificial\s+intelligence|openai|anthropic|xai|deepmind|chatgpt|chatbots?|claude|gemini|grok|copilot|machine\s+learning|superintelligen\w*|frontier\s+models?|deepfakes?|algorithms?)\b/i;
+var AI_WORDS = /\b(artificial\s+intelligence|openai|anthropic|xai|deepmind|chatgpt|chatbots?|claude|gemini|grok|copilot|machine\s+learning|superintelligen\w*|frontier\s+models?|deepfakes?|algorithms?)\b/i;
 function isAiStory(item) {
   var text = itemText(item);
-  return AI_CAPS.test(text) || AI_NAMES.test(text);
+  return AI_CAPS.test(text) || AI_WORDS.test(text);
 }
 function aiStoryOk(item) {
   // Firm copies only. Your own wire's AI beat includes AI safety and policy news (kill switches,
@@ -2181,26 +2167,21 @@ function aiStoryOk(item) {
 }
 
 // A Google News result on the News Wire has to show why it is there. Google matches words
-// anywhere on the page, sidebars included, so a search returns game reviews, sports roundups
-// (the Roundup search), GLP-1 stock stories and HOA liens (the lien search) whose headlines are
-// not about law. A story stays when it carries a tag (it names a topic or a watched firm) or
-// when its headline or summary is legal news: AI_LEGAL's words plus NEWS_LEGAL's. Tested on the
-// 62 untagged stories on the Verus wire 9/28/26: kept 26 of 28 real legal stories, dropped 19 of
-// 20 junk ones. The rest stay one tap away behind SHOW.
-//   Site searches (Reuters, Law360, Yahoo) carry no tag of their own: tagged or legal, on every copy.
-//   Topic and firm searches: on a firm copy, tagged or legal. Your own wire keeps them all, as
-//   it always has.
-// Feeds you listed (firm blogs, AboutLawsuits) are marked direct on arrival and skip this rule.
-var NEWS_LEGAL = /\b(suits?|llp|mediation|arbitrat\w*|circuit|bankrupt\w*|chapter\s+11|ch\.\s*11|recalls?|recalled|fda|doj|wrongful|negligen\w*|liability|liable|attorney|investigat\w*\s+(into|of)\s+\w+|hit\s+with)\b/i;
-function isLegalNews(item) {
-  var text = itemText(item);
-  return AI_LEGAL.test(text) || NEWS_LEGAL.test(text);
-}
+// anywhere on the page, sidebars included, so a search can return a Gizmodo boardroom story or
+// an IMDb item whose headline and summary never use the search's words. Such a story shows no
+// tag, since a tracked topic the story doesn't mention is left off.
+//   Site searches (Reuters, Law360, Yahoo) carry no tag of their own: an untagged one is dropped
+//   on every copy.
+//   Topic searches tag every result: on a firm copy an untagged one stays only from a trusted
+//   publisher (a Reuters "forever chemicals" story on the PFAS search). Your own wire keeps
+//   them, as it always has.
+// Direct feeds (firm blogs, AboutLawsuits) are not Google links, so this rule leaves them alone.
 function googleStoryOk(item) {
-  if (item.channel !== "news" || item.direct) return true;
-  if (tagsOf(item).length || isLegalNews(item)) return true;
+  if (item.channel !== "news" || !/news\.google\.com/.test(item.url || "")) return true;
+  if (tagsOf(item).length) return true;
   if (!(item.matched && item.matched.length) && !(item.watch && item.watch.length)) return false;
-  return !FIRM_BUILD;
+  if (!FIRM_BUILD) return true;
+  return fromTrusted(item);
 }
 
 function firmStoryOk(item) {
@@ -2212,12 +2193,9 @@ function firmStoryOk(item) {
 }
 
 function renderFeed() {
-  // A story fetched by two channels shows once, in the channel chan() gives it. A copy that
-  // would sit behind the OFF-TOPIC line yields to one that would not, so a story an AI line
-  // returned is not lost because the news scan also returned it untagged.
+  // A story fetched by two channels shows once, in the channel chan() gives it.
   var seenUrl = {};
-  var ordered = items.filter(googleStoryOk).concat(items.filter(function (i) { return !googleStoryOk(i); }));
-  var unique = ordered.filter(function (i) {
+  var unique = items.filter(function (i) {
     var k = "t:" + storyKey(i);
     if (seenUrl[i.url] || seenUrl[k]) return false;
     seenUrl[i.url] = true;
@@ -2229,8 +2207,7 @@ function renderFeed() {
   // Untagged Google results stay one tap away rather than gone, so a story whose headline words a
   // topic differently can still be read. Counted for the tab on screen.
   var untagged = passed.filter(function (i) { return !googleStoryOk(i); });
-  // MY TOPICS ONLY already hides every untagged story, so the SHOW line would reveal nothing.
-  var untaggedCount = settings.topicsOnly ? 0 : untagged.filter(function (i) { return inTab(i, filter); }).length;
+  var untaggedCount = untagged.filter(function (i) { return inTab(i, filter); }).length;
   var shown = showUntagged ? passed : passed.filter(googleStoryOk);
 
   // MY TOPICS ONLY keeps a story when it names one of your tracked topics, or when a firm name
@@ -2284,8 +2261,8 @@ function renderFeed() {
 
   if (scanned && untaggedCount) {
     html += '<div class="notice">' + (showUntagged
-      ? 'SHOWING ' + untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + '<button data-act="untagged">HIDE</button>'
-      : untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + ' HIDDEN<button data-act="untagged">SHOW</button>') + '</div>';
+      ? 'SHOWING ' + untaggedCount + (untaggedCount === 1 ? ' STORY THAT NAMES' : ' STORIES THAT NAME') + ' NO TOPIC<button data-act="untagged">HIDE</button>'
+      : untaggedCount + (untaggedCount === 1 ? ' STORY NAMES' : ' STORIES NAME') + ' NO TOPIC IN THE HEADLINE<button data-act="untagged">SHOW</button>') + '</div>';
   }
 
   if (scanned && hiddenCount && !readOnly) {
