@@ -1808,8 +1808,12 @@ function withinDay(x, y) {
   if (!x.date || !y.date) return false;
   return Math.abs(new Date(x.date) - new Date(y.date)) <= 86400000;
 }
+// Two copies share a topic when they prove the same tracked topic, or when the same search
+// found both: an AI search line, a firm name, a one-off search. The AI Wire on a firm copy has
+// no tracked AI topics, so without the search tags every rewrite of "OpenAI halts training"
+// stood on its own.
 function shareTopic(x, y) {
-  var a = topicsOf(x), b = topicsOf(y);
+  var a = tagsOf(x), b = tagsOf(y);
   for (var i = 0; i < a.length; i++) if (b.indexOf(a[i]) !== -1) return true;
   return false;
 }
