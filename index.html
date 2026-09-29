@@ -1135,7 +1135,7 @@ var TOPIC_RULES = {
   "glp-1": {
     loose: ["glp-1", "glp1", "ozempic", "wegovy", "mounjaro", "zepbound", "semaglutide", "tirzepatide",
             "weight loss drug", "weight-loss drug"],
-    context: /\b(lawsuits?|sued|sues|suing|mdl|claims?|plaintiffs?|litigation|vision|blind\w*|sight loss|eye stroke|optic|naion|gastroparesis|stomach paralysis|pancreatitis|injur\w*|side effects?|warns?|warning|risks?)\b/i
+    context: /\b(lawsuits?|sued|sues|suing|mdl|claims?|plaintiffs?|litigation|vision|blind\w*|sight loss|eye stroke|optic|naion|gastroparesis|stomach paralysis|pancreatitis|injur\w*|side effects?|warns?|warning|risks?|concerns?|birth defects?|stud(y|ies)|research\w*|analysis|linked to|fda|label)\b/i
   },
   "wildfire": {
     names: ["eaton fire", "palisades fire", "lahaina fire", "maui fire"],
@@ -2384,8 +2384,9 @@ var FIRM_LEGAL = /\b(lawsuits?|suits?|sued|sues|suing|settle(d|s|ment|ments)?|ve
 function namesTrackedTerm(item) {
   var text = itemText(item);
   return settings.topics.some(function (t) {
+    if (topicTab(t) !== "") return false;
     var p = topicPattern(t);
-    return (p.strict && p.strict.test(text)) || (p.loose && p.loose.test(text));
+    return !!(p.strict && p.strict.test(text));
   });
 }
 function googleStoryOk(item) {
@@ -2410,7 +2411,9 @@ function firmStoryOk(item) {
   // A firm copy is stricter: a firm-search result has to name the firm in its headline or
   // summary. A legal word alone let "Duane Morris To Settle Employee's Tax Withholding Claim"
   // through on the Massumi & Consoli search because the firm sat in the article body.
-  if (FIRM_BUILD) return fromTrusted(item) || item.watch.some(function (name) { return firmPattern(name).test(text); });
+  // No trusted-source pass here either: Law360 matched "Duane Morris To Settle Employee's Tax
+  // Withholding Claim" on a Massumi & Consoli mention in the body.
+  if (FIRM_BUILD) return item.watch.some(function (name) { return firmPattern(name).test(item.title || ""); });
   if (FIRM_CONTEXT.test(text) || fromTrusted(item)) return true;
   return item.watch.some(function (name) { return distinctiveWords(name) >= 2 && firmFullPattern(name).test(text); });
 }
