@@ -2,10 +2,12 @@
 # Strict-Transport-Security at the edge, so it is not repeated here.
 # SAMEORIGIN is safe for the home-screen app: it runs as its own window,
 # not inside a frame.
+# no-referrer: a click from the wire reaches the outside site with no referrer at all,
+# so no publisher learns the wire's address or which firm's copy sent the reader.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
-  Referrer-Policy: strict-origin-when-cross-origin
+  Referrer-Policy: no-referrer
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 
 # Function replies are per-device and must never be served from a cache.

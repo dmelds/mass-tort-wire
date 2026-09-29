@@ -510,8 +510,9 @@ if (FIRM_BUILD) {
   document.head.appendChild(gaTag);
 }
 
-// Links to the network's own sites carry the wire's origin, so a firm's click reaches the
-// site's own analytics as a referral from that firm's wire. Every other link stays blank.
+// Links to the network's own sites carry a wire tag, so a click reaches the site's own
+// analytics as a wire referral. A firm build sends the plain tag "firm", never the firm's
+// hostname, so no site learns which firm's wire sent the reader. Every other link stays blank.
 var OWN_SITE = /(^|\.)(lawsuitinformer\.com|lawsuitintelligencer\.com|lawsuit\.center|davidmeldofsky\.com)$/i;
 function hostOfUrl(u) { try { return new URL(u).hostname; } catch (e) { return ""; } }
 function storyHref(u) {
@@ -520,7 +521,7 @@ function storyHref(u) {
     var url = new URL(u);
     url.searchParams.set("utm_source", "masstortwire");
     url.searchParams.set("utm_medium", "referral");
-    url.searchParams.set("utm_campaign", location.hostname);
+    url.searchParams.set("utm_campaign", FIRM_BUILD ? "firm" : location.hostname);
     return url.toString();
   } catch (e) { return u; }
 }
