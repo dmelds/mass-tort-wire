@@ -157,6 +157,8 @@
   .notice { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); padding: 12px 0; border-bottom: 1px solid var(--rule); line-height: 1.5; }
   .notice.bad { color: var(--bad); }
   .notice button { background: none; border: 1px solid var(--ink); color: var(--ink); padding: 5px 9px; font-size: 10px; margin-left: 8px; }
+  .notice.hidden-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+  .notice.hidden-line .hp { white-space: nowrap; }
   .day { display: flex; justify-content: space-between; align-items: baseline; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; padding: 22px 0 6px; border-bottom: 1px solid var(--ink); }
   .day .n { color: var(--dim); }
   .day.offtopic { margin-top: 32px; border-bottom-color: var(--dim); color: var(--dim); }
@@ -189,7 +191,15 @@
     h1 { font-size: 24px; }
     .tagline { display: none; }
     .byline { font-size: 10px; letter-spacing: 0.08em; margin-top: 6px; }
-    .controls { padding: 10px 16px; }
+    .controls { padding: 10px 16px; flex-wrap: nowrap; gap: 6px; }
+    .controls button { letter-spacing: 0.08em; flex-shrink: 0; }
+    #scanBtn { padding: 10px 12px; }
+    .controls .ghost { padding: 9px 10px; }
+    .channel-status { gap: 8px; font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+    .notice { padding: 8px 0; }
+    .notice.hidden-line { gap: 6px 12px; font-size: 10px; letter-spacing: 0.04em; }
+    .notice.hidden-line .hl { display: none; }
+    .notice.hidden-line button { padding: 4px 7px; margin-left: 6px; }
     .filters { padding: 8px 12px 6px; }
     .filters button { min-height: 40px; padding: 10px 8px; }
     .toggles { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 16px 0; }
@@ -2380,17 +2390,16 @@ function renderFeed() {
       (readOnly ? '' : ' \u00B7 SEE EDIT SOURCES') + '</div>';
   });
 
+  // Off-topic and filtered stories share one line, so the counts cost one row on a phone.
+  // SHOW lists those stories at the end of the feed under their own heading.
+  var hiddenParts = [];
   if (scanned && untaggedCount) {
-    html += '<div class="notice">' + (showUntagged
-      ? untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + ' LISTED AT THE END OF THE FEED<button data-act="untagged">HIDE</button>'
-      : untaggedCount + ' OFF-TOPIC ' + (untaggedCount === 1 ? 'STORY' : 'STORIES') + ' HIDDEN<button data-act="untagged">SHOW</button>') + '</div>';
+    hiddenParts.push('<span class="hp">' + untaggedCount + ' OFF-TOPIC<button data-act="untagged">' + (showUntagged ? 'HIDE' : 'SHOW') + '</button></span>');
   }
-
   if (scanned && hiddenCount) {
-    html += '<div class="notice">' + (showBlocked
-      ? hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') + ' HIDDEN BY YOUR FILTERS, LISTED AT THE END OF THE FEED<button data-act="blocked">HIDE</button>'
-      : hiddenCount + (hiddenCount === 1 ? ' STORY' : ' STORIES') + ' HIDDEN BY YOUR FILTERS<button data-act="blocked">SHOW</button>') + '</div>';
+    hiddenParts.push('<span class="hp">' + hiddenCount + ' FILTERED<button data-act="blocked">' + (showBlocked ? 'HIDE' : 'SHOW') + '</button></span>');
   }
+  if (hiddenParts.length) html += '<div class="notice hidden-line"><span class="hl">HIDDEN:</span> ' + hiddenParts.join(' ') + '</div>';
 
   document.getElementById("newOnlyBtn").textContent = scanned ? "NEW ONLY (" + newCount + ")" : "NEW ONLY";
 
