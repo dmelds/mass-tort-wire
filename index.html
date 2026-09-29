@@ -559,7 +559,7 @@ var DEAL_TOPICS_SHARED = [
   "alternative business structure = ABS law firm, nonlawyer ownership, non-lawyer ownership",
   "Rule 5.4 = fee sharing, fee-sharing",
   "law firm merger = law firm acquisition, law firm combination, law firm mergers, merged firms, firms merge",
-  "third-party litigation funding = litigation finance, litigation funder, litigation fund, portfolio financing"
+  "third-party litigation funding = litigation finance, litigation funder, litigation fund, litigation portfolio"
 ];
 var PRESETS = {
   litigation: {
@@ -1244,8 +1244,22 @@ var TOPIC_RULES = {
     names: ["management services organization", "managed services organization", "alternative business structure",
             "fee sharing", "nonlawyer ownership", "non-lawyer ownership", "private equity law firm",
             "law firm private equity", "law firm back office", "rule 5.4"],
-    loose: ["mso", "private equity", "outside investment"],
+    loose: ["mso", "msos", "outside investment"],
     context: /\b(law firms?|firms?|lawyers?|attorneys?|legal|litigation|am law \d+)\b/i
+  },
+  // Investment in a law firm. "Private Equity Lawyer Peter Feist Returns to Weil" and "Sidley
+  // Expands Private Equity Practice" are practice-group news and stay out.
+  "law firm private equity": {
+    loose: ["private equity"],
+    context: /\b(law firms?|plaintiff firms?|injury firms?|personal injury|mso|msos|nonlawyer|non-lawyer|fee[\s-]sharing|alternative business structure)\b/i,
+    not: /\bprivate equity (lawyers?|partners?|practices?|groups?|teams?|co-?heads?|heads?|chairs?|deals? (lawyers?|team|practice))\b|\blaw firms behind\b|\badvis(es|ed|ing) (on|the)\b/i
+  },
+  // "MDL census" loses "MDL" to coreTerm and would prove itself on every census story.
+  "census": {
+    names: ["mdl census", "docket census", "case census", "claimant census", "census of cases", "census of claims",
+            "plaintiff fact sheet", "plaintiff fact sheets", "plaintiff profile form"],
+    loose: ["census"],
+    context: /\b(mdl|multidistrict|mass torts?|plaintiffs?|claimants?|dockets?|lawsuits?|litigation|bellwether)\b/i
   },
   // State AG consumer-protection enforcement against companies: suits, investigations, subpoenas,
   // settlements. A story needs a named state or multistate coalition, an enforcement word, and a
@@ -1299,7 +1313,7 @@ var TOPIC_RULES = {
     names: ["litigation funding", "litigation finance", "litigation funder", "litigation funders", "litigation financier",
             "legal funding", "legal funder", "legal funders", "tplf", "burford", "fortress investment", "omni bridgeway",
             "lawsuit funding", "pre-settlement funding", "third-party litigation", "third party litigation",
-            "third-party funding", "third party funding", "portfolio financing", "portfolio funding", "funded claims",
+            "third-party funding", "third party funding", "litigation portfolio", "portfolio of cases", "case portfolio", "funded claims",
             "funding agreement", "funding agreements", "litigation investment", "litigation investor", "litigation investors",
             "litigation fund", "litigation funds"],
     // "WestConnex Class Action Dropped After Funder Quits": a bare funder next to a case word.
@@ -1340,7 +1354,8 @@ function topicPattern(topic) {
       .concat(rule.names || [], topicAliases(topic))),
     loose: namesRx((ambiguous ? [core] : []).concat(rule.loose || [])),
     context: rule.context || null,
-    also: rule.also || null
+    also: rule.also || null,
+    not: rule.not || null
   };
   return topicRx[topic];
 }
@@ -1350,6 +1365,7 @@ function topicProven(topic, text) {
   if (p.strict && p.strict.test(text)) return true;
   if (p.also && p.also.test(text)) return true;
   if (!p.loose || !p.loose.test(text)) return false;
+  if (p.not && p.not.test(text)) return false;
   // Bare "Roundup" has to be out of digest form; other loose words need their context.
   if (p.ambiguous) return !DIGEST_BEFORE.test(text) && !DIGEST_AFTER.test(text);
   return p.context ? p.context.test(text) : true;
@@ -1666,7 +1682,7 @@ var DEAL_SEARCHES = {
   "alternative business structure": '"alternative business structure" OR "alternative business structures" OR "nonlawyer ownership" OR "non-lawyer ownership"',
   "rule 5.4": '"Rule 5.4" OR ("fee sharing" OR "fee-sharing") (lawyers OR "law firm" OR nonlawyer OR non-lawyer)',
   "law firm merger": '"law firm merger" OR "law firm mergers" OR "law firms merge" OR ("law firm" (merges OR "merge with" OR "merger with" OR "combination with"))',
-  "third-party funding": '"litigation funding" OR "litigation finance" OR "litigation funder" OR "litigation funders" OR "portfolio financing"',
+  "third-party funding": '"litigation funding" OR "litigation finance" OR "litigation funder" OR "litigation funders" OR "litigation fund"',
   "law firm valuation": '"law firm" (valuation OR EBITDA OR multiple) (sale OR sold OR acquisition OR investment OR MSO OR "private equity")',
   "global resolution": '(MDL OR "mass tort" OR "mass torts") -"Joint Base" ("global settlement" OR "settlement program" OR "global resolution" OR "settlement grid" OR "claims administrator")',
   "bellwether trial": 'bellwether (trial OR trials OR verdict OR ruling OR MDL)',
