@@ -559,7 +559,7 @@ var DEAL_TOPICS_SHARED = [
   "alternative business structure = ABS law firm, nonlawyer ownership, non-lawyer ownership",
   "Rule 5.4 = fee sharing, fee-sharing",
   "law firm merger = law firm acquisition, law firm combination, law firm mergers, merged firms, firms merge",
-  "third-party litigation funding = litigation finance, litigation funder, portfolio financing"
+  "third-party litigation funding = litigation finance, litigation funder, litigation fund, portfolio financing"
 ];
 var PRESETS = {
   litigation: {
@@ -1234,6 +1234,12 @@ var TOPIC_RULES = {
     loose: ["fca"],
     context: /\b(doj|justice|relators?|whistleblow\w*|qui tam|false claims)\b/i
   },
+  // "Weil weighs merger options as partner departures deepen pressure on Big Law firm" never
+  // says "law firm merger". A merger word next to a firm word proves the topic.
+  "law firm merger": {
+    loose: ["merger", "mergers", "merge", "merges", "merging", "combination"],
+    context: /\b(law firms?|big ?law|am law \d+|firms?)\b/i
+  },
   "law firm mso": {
     names: ["management services organization", "managed services organization", "alternative business structure",
             "fee sharing", "nonlawyer ownership", "non-lawyer ownership", "private equity law firm",
@@ -1294,7 +1300,11 @@ var TOPIC_RULES = {
             "legal funding", "legal funder", "legal funders", "tplf", "burford", "fortress investment", "omni bridgeway",
             "lawsuit funding", "pre-settlement funding", "third-party litigation", "third party litigation",
             "third-party funding", "third party funding", "portfolio financing", "portfolio funding", "funded claims",
-            "funding agreement", "funding agreements", "litigation investment", "litigation investor", "litigation investors"]
+            "funding agreement", "funding agreements", "litigation investment", "litigation investor", "litigation investors",
+            "litigation fund", "litigation funds"],
+    // "WestConnex Class Action Dropped After Funder Quits": a bare funder next to a case word.
+    loose: ["funder", "funders"],
+    context: /\b(class[\s-]actions?|lawsuits?|litigation|plaintiffs?|claimants?)\b/i
   },
   // Deepfake news is mostly politics and scams, so the name needs a civil-suit or statute word.
   "deepfake": {
@@ -1658,16 +1668,16 @@ var DEAL_SEARCHES = {
   "law firm merger": '"law firm merger" OR "law firm mergers" OR "law firms merge" OR ("law firm" (merges OR "merge with" OR "merger with" OR "combination with"))',
   "third-party funding": '"litigation funding" OR "litigation finance" OR "litigation funder" OR "litigation funders" OR "portfolio financing"',
   "law firm valuation": '"law firm" (valuation OR EBITDA OR multiple) (sale OR sold OR acquisition OR investment OR MSO OR "private equity")',
-  "global resolution": '(MDL OR "mass tort" OR "mass torts") ("global settlement" OR "settlement program" OR "global resolution" OR "settlement grid" OR "claims administrator")',
+  "global resolution": '(MDL OR "mass tort" OR "mass torts") -"Joint Base" ("global settlement" OR "settlement program" OR "global resolution" OR "settlement grid" OR "claims administrator")',
   "bellwether trial": 'bellwether (trial OR trials OR verdict OR ruling OR MDL)',
-  "daubert ruling": '(Daubert OR "Rule 702") (MDL OR "mass tort" OR "general causation" OR plaintiffs OR "expert testimony")',
-  "census": '(MDL OR "mass tort") (census OR "plaintiff fact sheet" OR "fact sheets" OR inventory)',
+  "daubert ruling": '(Daubert OR "Rule 702") -"Joint Base" (MDL OR "mass tort" OR "general causation" OR plaintiffs OR "expert testimony")',
+  "census": '(MDL OR "mass tort") -"Joint Base" (census OR "plaintiff fact sheet" OR "fact sheets" OR inventory)',
   "mass tort advertising": '("mass tort" OR "mass torts" OR "personal injury") (advertising OR "ad spend" OR "legal advertising" OR "claimant acquisition" OR "TV ads")',
   "arizona abs": 'Arizona ("alternative business structure" OR "ABS license" OR "ABS program" OR "nonlawyer ownership" OR "non-lawyer ownership") (law OR lawyers OR firm)',
   "california ab 2305": '"AB 2305" OR (California ("fee-sharing" OR "fee sharing" OR nonlawyer OR "investor-run" OR "corporate investment") ("law firms" OR "law firm"))',
   "colorado fee-sharing ban": '"Legal Practice Integrity" OR "HB26-1421" OR (Colorado ("fee-sharing" OR "fee sharing" OR nonlawyer) ("law firm" OR "law firms" OR lawyers))',
   "illinois hb 5487": '"HB 5487" OR (Illinois ("fee sharing" OR "fee-sharing" OR "nonlawyer ownership") ("law firm" OR "law firms" OR lawyers))',
-  "law firm succession": '"law firm" (succession OR "succession plan" OR "founder exit" OR "partner buyout" OR retirement) (owner OR founder OR partners OR sale)'
+  "law firm succession": '"law firm" (succession OR "founder exit" OR "partner buyout") (owner OR founder OR partners OR sale)'
 };
 
 function googleNewsUrl(topic) {
