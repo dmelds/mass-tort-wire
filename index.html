@@ -1245,14 +1245,13 @@ var TOPIC_RULES = {
             "fee sharing", "nonlawyer ownership", "non-lawyer ownership", "private equity law firm",
             "law firm private equity", "law firm back office", "rule 5.4"],
     loose: ["mso", "msos", "outside investment"],
-    context: /\b(law firms?|firms?|lawyers?|attorneys?|legal|litigation|am law \d+)\b/i
+    context: /\b(law firms?|firms?|lawyers?|attorneys?|legal|litigation|am law \d+|deals?)\b/i
   },
   // Investment in a law firm. "Private Equity Lawyer Peter Feist Returns to Weil" and "Sidley
   // Expands Private Equity Practice" are practice-group news and stay out.
   "law firm private equity": {
     loose: ["private equity"],
-    context: /\b(law firms?|plaintiff firms?|injury firms?|personal injury|mso|msos|nonlawyer|non-lawyer|fee[\s-]sharing|alternative business structure)\b/i,
-    not: /\bprivate equity (lawyers?|partners?|practices?|groups?|teams?|co-?heads?|heads?|chairs?|deals? (lawyers?|team|practice))\b|\blaw firms behind\b|\badvis(es|ed|ing) (on|the)\b/i
+    context: /\b(law firms?|plaintiff firms?|injury firms?|personal injury|mso|msos|nonlawyer|non-lawyer|fee[\s-]sharing|alternative business structure|lawyers?|attorneys?|big ?law|am law|practice|partners?)\b/i
   },
   // "MDL census" loses "MDL" to coreTerm and would prove itself on every census story.
   "census": {
@@ -1296,9 +1295,16 @@ var TOPIC_RULES = {
       "(?=.*\\b(settle\\w*|sues?|sued|suing|lawsuits?|civil penalt\\w*|verdicts?)\\b)",
       "i")
   },
+  // Ad spend, lead generation and PPC count when the story is about lawyers buying the ads:
+  // "Personal Injury Lawyer Market Intelligence for Assessing PPC Market".
   "mass tort advertising": {
     names: ["legal advertising", "lawyer advertising", "attorney advertising", "lawsuit advertising",
-            "claimant acquisition", "legal marketing"]
+            "law firm advertising", "claimant acquisition", "legal marketing", "law firm marketing",
+            "legal lead generation", "lawyer ads", "attorney ads", "law firm ads"],
+    loose: ["ppc", "pay-per-click", "pay per click", "ad spend", "advertising spend", "lead generation", "tv ads",
+            "television ads", "ad campaign", "billboards", "google ads", "cost per lead", "cost per case",
+            "intake", "case acquisition"],
+    context: /\b(personal injury|mass torts?|law firms?|lawyers?|attorneys?|plaintiff|legal)\b/i
   },
   // Web-tracking privacy suits: CIPA, wiretap and session-replay claims against sites and AI tools.
   "cipa": {
@@ -1443,6 +1449,9 @@ function chan(item) {
 function inTab(item, tab) {
   var c = chan(item);
   if (tab === "news") return c !== "ai" || topicsOf(item).length > 0 || isOwnAiStory(item);
+  // DEAL WIRE on a firm copy shows only stories that prove a tag; untagged legal news from a
+  // deal search stays on NEWS WIRE.
+  if (FIRM_BUILD && tab === "intel" && c === "intel" && !tagsOf(item).length) return false;
   if (c === tab) return true;
   return topicsOf(item).some(function (t) { return topicTab(t) === tab; });
 }
@@ -2364,8 +2373,28 @@ function isLegalNews(item) {
   var text = itemText(item);
   return AI_LEGAL.test(text) || NEWS_LEGAL.test(text);
 }
+// A firm copy reads wider than a beat desk. A deal search that returns "PE firm Straight Bat
+// brings in independent chairs" or "The $20 Million Partner Problem BigLaw Created" is business
+// of law news the copy wants, and a tort search that returns "GLP-1 drugs around conception"
+// names a tracked term without a legal word. Both stay on NEWS WIRE.
+var FIRM_BUSINESS = /\b(private equity|pe firms?|law firms?|big ?law|am ?law \d*|managing partners?|name partners?|equity partners?|rainmakers?|law practice|practice groups?|msos?|litigation fund\w*|plaintiffs?['\u2019]? bar|law firm)\b/i;
+// The legal words that keep a deal-search result on a firm copy: the ones that name a case or a
+// lawyer, not the wider AI Wire set (probe, police, harms) that passes foreign news.
+var FIRM_LEGAL = /\b(lawsuits?|suits?|sued|sues|suing|settle(d|s|ment|ments)?|verdicts?|trials?|courts?|judges?|jur(y|ors)|mdl|class[\s-]actions?|plaintiffs?|defendants?|litigation|litigat\w*|law firms?|lawyers?|attorneys?|counsel|bankrupt\w*|arbitrat\w*|mediation|liability|liable|negligen\w*|wrongful|recalls?|recalled|fda|doj)\b/i;
+function namesTrackedTerm(item) {
+  var text = itemText(item);
+  return settings.topics.some(function (t) {
+    var p = topicPattern(t);
+    return (p.strict && p.strict.test(text)) || (p.loose && p.loose.test(text));
+  });
+}
 function googleStoryOk(item) {
   if (item.direct) return true;
+  if (FIRM_BUILD && (item.channel === "intel" || item.channel === "news")) {
+    if (tagsOf(item).length) return true;
+    var text = itemText(item);
+    return FIRM_LEGAL.test(text) || FIRM_BUSINESS.test(text) || namesTrackedTerm(item);
+  }
   // The middle tab (INTELLIGENCER, or DEAL WIRE on a firm copy) runs beat searches whose results
   // are nearly all legal news, so a legal word proves nothing there: a story stays when it
   // proves a beat, and "Boston sues DOT over EV chargers" goes behind OFF-TOPIC.
@@ -2378,6 +2407,10 @@ function firmStoryOk(item) {
   if (!item.watch || !item.watch.length) return true;
   if ((item.matched && item.matched.length) || topicsOf(item).length) return true;
   var text = itemText(item);
+  // A firm copy is stricter: a firm-search result has to name the firm in its headline or
+  // summary. A legal word alone let "Duane Morris To Settle Employee's Tax Withholding Claim"
+  // through on the Massumi & Consoli search because the firm sat in the article body.
+  if (FIRM_BUILD) return fromTrusted(item) || item.watch.some(function (name) { return firmPattern(name).test(text); });
   if (FIRM_CONTEXT.test(text) || fromTrusted(item)) return true;
   return item.watch.some(function (name) { return distinctiveWords(name) >= 2 && firmFullPattern(name).test(text); });
 }
