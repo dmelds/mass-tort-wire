@@ -558,7 +558,7 @@ var DEAL_TOPICS_SHARED = [
   "law firm private equity = private equity law firm, outside investment law firm",
   "alternative business structure = ABS law firm, nonlawyer ownership, non-lawyer ownership",
   "Rule 5.4 = fee sharing, fee-sharing",
-  "law firm merger = law firm acquisition, law firm combination",
+  "law firm merger = law firm acquisition, law firm combination, law firm mergers, merged firms, firms merge",
   "third-party litigation funding = litigation finance, litigation funder, portfolio financing"
 ];
 var PRESETS = {
@@ -578,8 +578,8 @@ var PRESETS = {
   buyer: {
     topics: DEAL_TOPICS_SHARED.concat([
       "global resolution = global settlement, settlement grid, settlement program, claims administrator",
-      "bellwether trial = bellwether verdict, bellwether ruling",
-      "Daubert ruling = Rule 702, expert exclusion, general causation",
+      "bellwether trial = bellwether, bellwether verdict, bellwether ruling",
+      "Daubert ruling = Daubert, Rule 702, expert exclusion, general causation",
       "MDL census = plaintiff fact sheet, docket census",
       "mass tort advertising = legal advertising spend, claimant acquisition",
       "law firm valuation = law firm EBITDA, law firm multiple"
@@ -589,7 +589,7 @@ var PRESETS = {
   seller: {
     topics: DEAL_TOPICS_SHARED.concat([
       "Arizona ABS = Arizona alternative business structure",
-      "California AB 2305 = fee-sharing prohibition, nonlawyer control",
+      "California AB 2305 = fee-sharing prohibition, nonlawyer control, investor-run law firms, corporate investment in law firms, investor-owned law firms",
       "Colorado fee-sharing ban = Legal Practice Integrity and Fee-sharing Prohibition Act",
       "Illinois HB 5487",
       "law firm valuation = law firm EBITDA, law firm multiple",
@@ -1239,7 +1239,7 @@ var TOPIC_RULES = {
             "fee sharing", "nonlawyer ownership", "non-lawyer ownership", "private equity law firm",
             "law firm private equity", "law firm back office", "rule 5.4"],
     loose: ["mso", "private equity", "outside investment"],
-    context: /\b(law firms?|lawyers?|attorneys?|legal|litigation)\b/i
+    context: /\b(law firms?|firms?|lawyers?|attorneys?|legal|litigation|am law \d+)\b/i
   },
   // State AG consumer-protection enforcement against companies: suits, investigations, subpoenas,
   // settlements. A story needs a named state or multistate coalition, an enforcement word, and a
@@ -1427,7 +1427,17 @@ function tagsOf(item) {
   var tracked = {};
   settings.topics.forEach(function (t) { tracked[t] = 1; tracked[topicName(t)] = 1; });
   var beats = (item.matched || []).filter(function (t) { return !tracked[t]; });
-  return (item.watch || []).concat(topicsOf(item), beats);
+  return (item.watch || []).concat(firmsNamed(item), topicsOf(item), beats);
+}
+
+// Watched firms a story names in full, whichever search returned it. A topic search that returns
+// "Massumi + Consoli Launches ElevenHundred+ MSO" proves the firm even when the headline proves
+// no topic. Only names with two distinctive words count, so "Gori Law" needs both words.
+function firmsNamed(item) {
+  var text = itemText(item), watch = item.watch || [];
+  return (settings.firmWatch || []).filter(function (name) {
+    return watch.indexOf(name) === -1 && distinctiveWords(name) >= 2 && firmFullPattern(name).test(text);
+  });
 }
 
 function queryWords(q) {
@@ -1636,8 +1646,34 @@ var EXTRA_SEARCHES = {
   ]
 };
 
+// The deal-desk topics are ordinary business words. Searched bare, "law firm succession" returns
+// every succession story and "Arizona ABS" the Diamondbacks' ABS challenges, and the junk takes
+// the slots the real stories need. Each runs as a phrased query instead. Tagging is unchanged:
+// a result still has to prove the topic by name or alias in its headline or summary.
+var DEAL_SEARCHES = {
+  "law firm mso": '("law firm" OR "law firms" OR "plaintiff firm") (MSO OR "management services organization")',
+  "law firm private equity": '"private equity" ("law firm" OR "law firms" OR "plaintiff firms" OR "personal injury firm")',
+  "alternative business structure": '"alternative business structure" OR "alternative business structures" OR "nonlawyer ownership" OR "non-lawyer ownership"',
+  "rule 5.4": '"Rule 5.4" OR ("fee sharing" OR "fee-sharing") (lawyers OR "law firm" OR nonlawyer OR non-lawyer)',
+  "law firm merger": '"law firm merger" OR "law firm mergers" OR "law firms merge" OR ("law firm" (merges OR "merge with" OR "merger with" OR "combination with"))',
+  "third-party funding": '"litigation funding" OR "litigation finance" OR "litigation funder" OR "litigation funders" OR "portfolio financing"',
+  "law firm valuation": '"law firm" (valuation OR EBITDA OR multiple) (sale OR sold OR acquisition OR investment OR MSO OR "private equity")',
+  "global resolution": '(MDL OR "mass tort" OR "mass torts") ("global settlement" OR "settlement program" OR "global resolution" OR "settlement grid" OR "claims administrator")',
+  "bellwether trial": 'bellwether (trial OR trials OR verdict OR ruling OR MDL)',
+  "daubert ruling": '(Daubert OR "Rule 702") (MDL OR "mass tort" OR "general causation" OR plaintiffs OR "expert testimony")',
+  "census": '(MDL OR "mass tort") (census OR "plaintiff fact sheet" OR "fact sheets" OR inventory)',
+  "mass tort advertising": '("mass tort" OR "mass torts" OR "personal injury") (advertising OR "ad spend" OR "legal advertising" OR "claimant acquisition" OR "TV ads")',
+  "arizona abs": 'Arizona ("alternative business structure" OR "ABS license" OR "ABS program" OR "nonlawyer ownership" OR "non-lawyer ownership") (law OR lawyers OR firm)',
+  "california ab 2305": '"AB 2305" OR (California ("fee-sharing" OR "fee sharing" OR nonlawyer OR "investor-run" OR "corporate investment") ("law firms" OR "law firm"))',
+  "colorado fee-sharing ban": '"Legal Practice Integrity" OR "HB26-1421" OR (Colorado ("fee-sharing" OR "fee sharing" OR nonlawyer) ("law firm" OR "law firms" OR lawyers))',
+  "illinois hb 5487": '"HB 5487" OR (Illinois ("fee sharing" OR "fee-sharing" OR "nonlawyer ownership") ("law firm" OR "law firms" OR lawyers))',
+  "law firm succession": '"law firm" (succession OR "succession plan" OR "founder exit" OR "partner buyout" OR retirement) (owner OR founder OR partners OR sale)'
+};
+
 function googleNewsUrl(topic) {
   var term = coreTerm(topic).replace(/"/g, "");
+  var deal = DEAL_SEARCHES[term.toLowerCase()];
+  if (deal) return gnews(deal + whenClause());
   if (AMBIGUOUS_TERMS[term.toLowerCase()]) {
     var phrases = TOPIC_PAIRS.map(function (w) { return '"' + term + " " + w + '"'; });
     return gnews("(" + phrases.join(" OR ") + ")" + whenClause());
@@ -2219,7 +2255,7 @@ function firmPattern(name) {
   var count = {};
   words.forEach(function (w) { count[w] = (count[w] || 0) + 1; });
   var surnames = words.filter(function (w) { return w.length >= 4 && !FIRM_NAME_SKIP[w] && count[w] === 1; });
-  var full = rx(name).replace(/\s*&\s*/g, "\\s*(&|and)\\s*").replace(/\s+/g, "\\s+");
+  var full = rx(name).replace(/\s*&\s*/g, "\\s*(&|and|\\+)\\s*").replace(/\s+/g, "\\s+");
   var parts = [full].concat(surnames.map(rx));
   firmRxCache[name] = new RegExp("\\b(" + parts.join("|") + ")\\b", "i");
   return firmRxCache[name];
@@ -2237,7 +2273,7 @@ function namesWatchedFirm(item) {
 //   its headline or summary uses a legal or business word (verdict, settlement, sponsorship), or
 //   it comes from a trusted source (Reuters, Law360), which Google matched on the full article.
 // Stories that also prove one of your topics, or that came from a feed, are never checked here.
-var FIRM_CONTEXT = /\b(law\s*firms?|lawyers?|attorneys?|lawsuits?|litigation|litigat\w*|settle(d|s|ment|ments)?|verdicts?|jur(y|ors?)|judges?|courts?|trials?|mdl|class\s+actions?|claims?|claimants?|plaintiffs?|defendants?|counsel|legal|su(ed|es|ing)|filed|complaints?|bankruptcy|administrators?|sponsor(s|ed|ship|ships)?|partner(s|ed|ship)?|acquir(e|es|ed)|acquisition|merger|appoint(s|ed|ment)?|injur(y|ies|ed)|offices?|hir(e|es|ed|ing)|join(s|ed)?|expan(d|ds|ded|sion))\b/i;
+var FIRM_CONTEXT = /\b(law\s*firms?|lawyers?|attorneys?|lawsuits?|litigation|litigat\w*|settle(d|s|ment|ments)?|verdicts?|jur(y|ors?)|judges?|courts?|trials?|mdl|class\s+actions?|claims?|claimants?|plaintiffs?|defendants?|counsel|legal|su(ed|es|ing)|filed|complaints?|bankruptcy|administrators?|sponsor(s|ed|ship|ships)?|partner(s|ed|ship)?|acquir(e|es|ed)|acquisitions?|merger|msos?|private\s+equity|invest(s|ed|ment|ments|ors?)|launch(es|ed)?|appoint(s|ed|ment)?|injur(y|ies|ed)|offices?|hir(e|es|ed|ing)|join(s|ed)?|expan(d|ds|ded|sion))\b/i;
 function distinctiveWords(name) {
   var words = name.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
   var seen = {};
@@ -2249,7 +2285,7 @@ function distinctiveWords(name) {
 var firmFullCache = {};
 function firmFullPattern(name) {
   if (!firmFullCache[name]) {
-    var full = rx(name).replace(/\s*&\s*/g, "\\s*(&|and)\\s*").replace(/\s+/g, "\\s+");
+    var full = rx(name).replace(/\s*&\s*/g, "\\s*(&|and|\\+)\\s*").replace(/\s+/g, "\\s+");
     firmFullCache[name] = new RegExp("\\b" + full + "\\b", "i");
   }
   return firmFullCache[name];
@@ -2273,6 +2309,9 @@ function isAiStory(item) {
   var text = itemText(item);
   return AI_CAPS.test(text) || AI_NAMES.test(text);
 }
+// Legal AI companies. A story about one is legal AI news even when the headline carries no legal
+// word: "Harvey Launches Its First Ever TV Commercials" is about a legal AI vendor's ad spend.
+var LEGAL_AI_NAMES = /\b(harvey|clio|legora|evenup|supio|ironclad|relativity|casetext|cocounsel|lexisnexis|lexis\+?|westlaw|thomson\s+reuters|vlex|spellbook|luminance|eve\.legal|darrow)\b/i;
 function aiStoryOk(item) {
   // Every build. AI safety and policy news (kill switches, training pauses, Senate probes) comes
   // in through lines that start with *, which keep everything they return.
@@ -2280,7 +2319,8 @@ function aiStoryOk(item) {
   if (topicsOf(item).length) return true;
   var open = openAiLines();
   if ((item.matched || []).some(function (t) { return open[t]; })) return isAiStory(item);
-  return AI_LEGAL.test(itemText(item));
+  var text = itemText(item);
+  return AI_LEGAL.test(text) || LEGAL_AI_NAMES.test(text);
 }
 
 // A Google News result on the News Wire has to show why it is there. Google matches words
