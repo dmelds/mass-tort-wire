@@ -1125,7 +1125,8 @@ var TOPIC_RULES = {
   "data breach": {
     names: ["data breach class action", "data breach settlement", "data breach lawsuit", "data breach litigation"],
     loose: ["data breach", "data breaches"],
-    context: /\b(lawsuits?|suits?|class\s+actions?|settle(d|s|ment|ments)?|sue[sd]?|suing|litigation|claims?|claimants?|plaintiffs?|attorneys?|law\s*firms?|payouts?|compensation)\b/i
+    // "Labcorp Inks $2.3M Deal To Resolve Multistate Data Breach" is a settlement written as a deal.
+    context: /\b(lawsuits?|suits?|class\s+actions?|settle(d|s|ment|ments)?|sue[sd]?|suing|litigation|claims?|claimants?|plaintiffs?|attorneys?|law\s*firms?|payouts?|compensation|deal|resolve[sd]?|multistate|attorneys? general|\$[\d.,]+ ?[mk]|million|exposed|exposes|affected)\b/i
   },
   "pfas": { names: ["forever chemical", "pfoa", "pfos"] },
   "afff": { names: ["firefighting foam", "firefighter foam", "fire-fighting foam", "aqueous film"] },
@@ -2413,7 +2414,14 @@ function firmStoryOk(item) {
   // through on the Massumi & Consoli search because the firm sat in the article body.
   // No trusted-source pass here either: Law360 matched "Duane Morris To Settle Employee's Tax
   // Withholding Claim" on a Massumi & Consoli mention in the body.
-  if (FIRM_BUILD) return item.watch.some(function (name) { return firmPattern(name).test(item.title || ""); });
+  // A one-word name (Epiq, Kroll) also names a car or a person, so it needs a legal or business
+  // word beside it in the headline; a two-word name in the headline is enough on its own.
+  if (FIRM_BUILD) return item.watch.some(function (name) {
+    var title = item.title || "";
+    if (/\s/.test(name.trim()) && firmFullPattern(name).test(title)) return true;
+    if (!firmPattern(name).test(title)) return false;
+    return distinctiveWords(name) >= 2 || FIRM_CONTEXT.test(title) || FIRM_BUSINESS.test(title);
+  });
   if (FIRM_CONTEXT.test(text) || fromTrusted(item)) return true;
   return item.watch.some(function (name) { return distinctiveWords(name) >= 2 && firmFullPattern(name).test(text); });
 }
