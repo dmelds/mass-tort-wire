@@ -335,7 +335,7 @@
 <script>
 // ── Defaults ──
 // Bump when a default below has to reach devices that already saved their settings.
-var SETTINGS_VERSION = 17;
+var SETTINGS_VERSION = 18;
 // FIRM BUILD. false on main, true on the `firm` branch, and that one line is the only
 // difference between the two. A firm build starts with no topics, no firm watch and no
 // AI searches, never receives this wire's topic additions on a version bump, and keeps
@@ -375,7 +375,11 @@ var DEFAULTS = {
     // Intelligencer beats added in v16
     "CIPA lawsuit", "third-party litigation funding",
     // AI Wire beat added in v16
-    "deepfake lawsuit"
+    "deepfake lawsuit",
+    // AI Wire beat added in v18: OpenAI injury and wrongful death suits, searched by name. Until now
+    // an OpenAI suit reached the wire only by mentioning a state attorney general or fitting the
+    // "AI chatbot lawsuit" phrase; the FSU wrongful death cases did neither on their own.
+    "OpenAI lawsuit"
   ],
   outlets: ["reuters.com", "law360.com", "yahoo.com"],
   // Link wrappers carry a headline and no article, so a firm name search can surface
@@ -470,7 +474,8 @@ var ADDED = {
                        "data center + " + DATA_CENTER_POLICY] },
   16: { topics: ["hernia mesh lawsuit", "baby food lawsuit", "ultra-processed food lawsuit", "Camp Lejeune lawsuit",
                  "Roblox lawsuit", "CIPA lawsuit", "third-party litigation funding", "deepfake lawsuit"] },
-  17: { blockedTerms: SECURITIES_TERMS }
+  17: { blockedTerms: SECURITIES_TERMS },
+  18: { topics: ["OpenAI lawsuit"] }
 };
 // A firm build ships none of this wire's topic list. The firm enters its own litigations and
 // the firms it watches under EDIT SOURCES, and those live in that site's own settings store.
@@ -1107,6 +1112,7 @@ function tagLabel(t) {
 //   names: other names that prove the topic on their own
 //   loose: words that also mean other things, so they count only when `context` is in the story too
 //   also:  a pattern that proves the topic on its own, for stories the press writes without the topic's name
+//   not:   a pattern that turns a story away on the loose path, for a word that also names an unrelated fight
 // Shared by the state attorney general rule's two proof paths.
 var AG_FEDERAL = "u\\.s\\. attorney general|us attorney general|justice department|department of justice|doj|federal|" +
   "trump|administration|governor|white house";
@@ -1198,6 +1204,17 @@ var TOPIC_RULES = {
     names: ["character.ai", "ai companion"],
     loose: ["ai chatbot", "chatbot", "chatgpt", "openai", "section 230", "grok", "xai"],
     context: /\b(deaths?|died|suicide|wrongful|teens?|overdose|minors?|harm|injur\w*|lawsuits?|sued|sues|suing|injunction\w*|restrain\w*|restrict\w*|attorney general|attorneys general|court)\b/i
+  },
+  // OpenAI and ChatGPT name a company and a product the press writes about all day, so both are
+  // loose and count only beside an injury, death or suit word. The phrases in names are the suits
+  // themselves and prove the topic alone. Musk's contract fight, the copyright cases and the
+  // nonprofit conversion also put "OpenAI" beside "lawsuit"; `not` turns those away.
+  "openai": {
+    names: ["openai wrongful death", "chatgpt wrongful death", "chatgpt suicide", "chatgpt overdose",
+            "chatgpt shooting", "openai product liability", "chatgpt product liability", "jccp 5431"],
+    loose: ["openai", "chatgpt"],
+    context: /\b(deaths?|died|dies|killed|suicide|wrongful|overdose|shooting|shooter|harm\w*|injur\w*|product liability|negligen\w*|sued|sues|suing|lawsuits?|complaint|plaintiffs?|jury|verdict|mdl|jccp|attorney general|attorneys general|court)\b/i,
+    not: /\b(musk|copyright|infring\w*|training data|nonprofit|non-profit|for-profit|restructur\w*|antitrust|trademark)\b/i
   },
   // Litigation practice only: sanctions, hallucinated citations, AI in filings, briefs, depositions
   // and evidence, plus courts issuing AI rules. "AI" next to a bare "court" or "judge" pulled in
@@ -1818,7 +1835,8 @@ function fetchNews() {
   var searches = topicSearches("");
   return Promise.allSettled([
     runBatches(searches, 10),
-    runBatches(settings.newsFeeds.concat(OWN_NEWS_FEEDS), 8).then(markDirect),
+    runBatches(settings.newsFeeds, 8).then(markDirect),
+    runBatches(OWN_NEWS_FEEDS, OWN_FEED_ITEMS).then(markDirect),
     runBatches(outletSearches(), 10),
     runBatches(settings.firmFeeds, 8).then(markDirect),
     runBatches(firmSearches(), 6)
@@ -1848,13 +1866,16 @@ function aiSearches() {
 // Google News has picked them up. A firm copy carries both feeds in its settings instead.
 var OWN_INTEL_FEEDS = FIRM_BUILD ? [] : ["https://lawsuitintelligencer.com/feed.xml"];
 var OWN_NEWS_FEEDS = FIRM_BUILD ? [] : ["https://lawsuitinformer.com/feed.xml"];
+// Items kept from each of the site's own feeds, the most the feeds function allows. At the usual 8,
+// a batch of nine pages pushed in one day (Sep 7, 16 and 25, 2026) left one update off the wire.
+var OWN_FEED_ITEMS = 15;
 
 // Intelligencer searches keep 15 results a feed rather than 10: nine beats over seven days,
 // ranked by relevance, left Tuesday and Wednesday empty at 10.
 function fetchIntel() {
   return Promise.allSettled([
     runBatches(topicSearches("intel"), 15),
-    runBatches(OWN_INTEL_FEEDS, 8).then(markDirect)
+    runBatches(OWN_INTEL_FEEDS, OWN_FEED_ITEMS).then(markDirect)
   ])
     .then(function (results) { return mergeChannel(results, "intel"); });
 }
