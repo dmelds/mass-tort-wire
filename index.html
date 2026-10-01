@@ -504,6 +504,12 @@ function track(name, params) {
   if (typeof window.gtag !== "function") return;
   try { window.gtag("event", name, params || {}); } catch (e) { /* never let analytics break the wire */ }
 }
+var pageViewSent = false;
+function sendPageView() {
+  if (pageViewSent) return;
+  pageViewSent = true;
+  track("page_view", { page_title: document.title, page_location: location.href });
+}
 // Your own devices: open any firm wire once with ?me=1 and that browser is marked internal
 // from then on, whatever its IP, so the GA4 Internal Traffic filter drops it. ?me=0 undoes it.
 var INTERNAL_KEY = "mtw-internal";
@@ -518,7 +524,12 @@ if (FIRM_BUILD) {
   window.dataLayer = window.dataLayer || [];
   window.gtag = function () { window.dataLayer.push(arguments); };
   window.gtag("js", new Date());
-  window.gtag("config", GA_ID, isInternal() ? { traffic_type: "internal" } : {});
+  // No page_view at load: the tag would record the page under the generic title before the firm's
+  // name reaches it, pooling every firm's opens under one row. sendPageView fires it once the
+  // saved settings, firm name included, are applied at start.
+  var gaConfig = { send_page_view: false };
+  if (isInternal()) gaConfig.traffic_type = "internal";
+  window.gtag("config", GA_ID, gaConfig);
   var gaTag = document.createElement("script");
   gaTag.async = true;
   gaTag.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID;
@@ -2154,11 +2165,21 @@ function runScan() {
 
 document.getElementById("scanBtn").onclick = runScan;
 
+// GA4 keeps the first 100 characters of a parameter, so the headline is cut there rather than
+// letting GA4 cut it mid-word for us.
+function ga4Text(s) { return String(s || "").slice(0, 100); }
 document.getElementById("feed").addEventListener("click", function (e) {
   var a = e.target.closest && e.target.closest("a.item");
   if (!a) return;
   var host = hostOfUrl(a.href);
-  track("story_click", { link_host: host, own_site: OWN_SITE.test(host) ? "yes" : "no", tab: a.dataset.tab || "" });
+  track("story_click", {
+    link_host: host,
+    own_site: OWN_SITE.test(host) ? "yes" : "no",
+    tab: a.dataset.tab || "",
+    story_title: ga4Text(a.dataset.title),
+    story_source: ga4Text(a.dataset.source),
+    story_topic: ga4Text(a.dataset.topic)
+  });
 });
 
 // ── Render ──
@@ -2167,6 +2188,8 @@ function esc(s) {
   d.textContent = s == null ? "" : String(s);
   return d.innerHTML;
 }
+// esc() leaves double quotes alone, and a headline inside a data- attribute needs them escaped.
+function attr(s) { return esc(s).replace(/"/g, "&quot;"); }
 
 function isNew(item) {
   var t = firstSeen[seenKey(item)];
@@ -2565,7 +2588,11 @@ function renderFeed() {
     var moreSources = (item.moreSources || []).slice();
     if (ex) ex.sources.forEach(function (s) { if (moreSources.indexOf(s) === -1) moreSources.push(s); });
     var own = OWN_SITE.test(hostOfUrl(item.url));
-    return '<a class="item ' + esc(c) + '" href="' + esc(storyHref(item.url)) + '" target="_blank" rel="' + (own ? "noopener" : "noopener noreferrer") + '" data-tab="' + esc(c) + '">'
+    // The headline, publisher and first tag ride on the link so a click can report which story
+    // opened. Google News links are opaque tokens, so the link alone names nothing.
+    var topicTag = tagsOf(item)[0] || "";
+    return '<a class="item ' + esc(c) + '" href="' + esc(storyHref(item.url)) + '" target="_blank" rel="' + (own ? "noopener" : "noopener noreferrer") + '" data-tab="' + esc(c) + '"'
+      + ' data-title="' + attr(item.title) + '" data-source="' + attr(item.source) + '" data-topic="' + attr(topicTag ? tagLabel(topicTag) : "") + '">'
       + '<div class="src">' + CHANNELS[c] + ' \u00B7 ' + esc(item.source || "\u2014")
       + (when ? ' \u00B7 ' + esc(when) : '')
       + (more ? ' \u00B7 <span class="more" title="' + esc(moreSources.join(", ")) + '">+'
@@ -2629,6 +2656,7 @@ pullSettings().then(function (remote) {
     setSync("Couldn't reach the site, so this window is using the settings saved in it.", true);
   }
   fillInputs();
+  sendPageView();
   if (FIRM_BUILD && !settings.topics.length && readOnly) {
     renderFeed();
     return;
