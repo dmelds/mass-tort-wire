@@ -30,6 +30,7 @@
     --firms: #3E6B4F;
     --ai: #6B4A7A;
     --intel: #7C5B1E;
+    --docket: #4A4F57;
     --bad: #A2412A;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -58,6 +59,7 @@
   .channel-status .news { color: var(--news); }
   .channel-status .ai { color: var(--ai); }
   .channel-status .intel { color: var(--intel); }
+  .channel-status .docket { color: var(--docket); }
 
   #config { display: none; border-bottom: 1px solid var(--rule); background: var(--panel); padding: 16px 20px; }
   #config.open { display: block; }
@@ -110,6 +112,7 @@
   .filters button.active[data-f="news"] { background: var(--news); }
   .filters button.active[data-f="ai"] { background: var(--ai); }
   .filters button.active[data-f="intel"] { background: var(--intel); }
+  .filters button.active[data-f="docket"] { background: var(--docket); }
 
   .search { padding: 0 16px 10px; display: flex; gap: 8px; }
   .search input[type=search] {
@@ -172,6 +175,9 @@
   .item.news .src { color: var(--news); }
   .item.ai .src { color: var(--ai); }
   .item.intel .src { color: var(--intel); }
+  .item.docket { border-left-color: var(--docket); }
+  .item.docket .src { color: var(--docket); }
+  .item .tag.page { color: var(--news); border-color: var(--news); }
   .item .new { background: var(--amber); color: var(--paper); padding: 1px 5px; margin-left: 6px; letter-spacing: 0.1em; }
   .item .more { color: var(--dim); }
   .item .title { font-family: 'Spectral', Georgia, serif; font-size: 16px; font-weight: 600; line-height: 1.3; }
@@ -228,6 +234,7 @@
     <span class="news">NEWS <span id="st-news"></span></span>
     <span class="intel">INTEL <span id="st-intel"></span></span>
     <span class="ai">AI <span id="st-ai"></span></span>
+    <span class="docket">DOCKET <span id="st-docket"></span></span>
   </div>
 </div>
 
@@ -307,6 +314,7 @@
     <button data-f="news" class="active">NEWS WIRE (<span id="ct-news">0</span>)</button>
     <button data-f="intel">INTELLIGENCER (<span id="ct-intel">0</span>)</button>
     <button data-f="ai">AI WIRE (<span id="ct-ai">0</span>)</button>
+    <button data-f="docket">DOCKET (<span id="ct-docket">0</span>)</button>
   </div>
   <div class="search">
     <input type="search" id="searchInput" placeholder="Search a topic, firm or keyword" aria-label="Search the wire" autocomplete="off" enterkeyhint="search">
@@ -329,7 +337,7 @@
 
 <footer>
   MASS TORT WIRE IS BUILT AND MAINTAINED BY DAVID MELDOFSKY, PUBLISHER OF <a href="https://lawsuitintelligencer.com/?utm_source=masstortwire&amp;utm_medium=referral&amp;utm_campaign=footer" target="_blank" rel="noopener">LAWSUIT INTELLIGENCER</a> AND <a href="https://lawsuitinformer.com/?utm_source=masstortwire&amp;utm_medium=referral&amp;utm_campaign=footer" target="_blank" rel="noopener">LAWSUIT INFORMER</a>. &copy; 2026 DAVID MELDOFSKY. ALL RIGHTS RESERVED.<br>
-  NEWS WIRE: EVERY STORY ON THE WIRE, GROUPED BY DAY &middot; NEW: ARRIVED IN THE LAST 24 HOURS &middot; INTELLIGENCER: STORIES ON LAWSUIT INTELLIGENCER'S BEATS &middot; AI WIRE: AI TOPICS, AI-IN-LAW SEARCHES AND LEGAL TECH FEEDS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
+  NEWS WIRE: EVERY STORY ON THE WIRE, GROUPED BY DAY &middot; NEW: ARRIVED IN THE LAST 24 HOURS &middot; INTELLIGENCER: STORIES ON LAWSUIT INTELLIGENCER'S BEATS &middot; AI WIRE: AI TOPICS, AI-IN-LAW SEARCHES AND LEGAL TECH FEEDS &middot; DOCKET: ORDERS AND FILINGS ON THE TRACKED MDL AND CASE DOCKETS &middot; NO API KEYS &middot; SETTINGS SAVED TO THE SITE
 </footer>
 
 <script>
@@ -2151,6 +2159,7 @@ function runScan() {
     });
   }
 
+  loadDocket();
   Promise.allSettled([
     run("news", fetchNews), run("intel", fetchIntel), run("ai", fetchAI)
   ]).then(function () {
@@ -2524,6 +2533,9 @@ function renderFeed() {
     document.getElementById("ct-" + tab).textContent =
       foldVersions(hits.filter(function (i) { return inTab(i, tab); })).list.length;
   });
+  document.getElementById("ct-docket").textContent = docketShown().length;
+  document.getElementById("topicsOnlyBtn").hidden = filter === "docket";
+  if (filter === "docket") { renderDocket(); return; }
 
   var folded = foldVersions(hits.filter(function (i) { return inTab(i, filter); }));
   var visible = folded.list;
@@ -2626,6 +2638,122 @@ function renderFeed() {
     blkFolded.list.forEach(function (item) { html += itemHtml(item, blkFolded.extra, hiddenReason(item)); });
   }
 
+  document.getElementById("feed").innerHTML = html;
+}
+
+// ── Docket ──
+// The DOCKET tab shows the court entries the docket watch in network-ops finds on the tracked
+// MDL and case dockets: orders, opinions, scheduling and case-management orders, bellwether,
+// Daubert, dismissal, remand and settlement entries on the MDLs, and every entry on a single
+// case. The watch posts them to netlify/functions/docket.mjs four times a day; the page reads
+// them back with each scan. They stay out of the news pipeline, so blocked words, topic rules
+// and story folding never touch a court entry. NEW counts from when an entry first reached the
+// wire, which the site records, so it agrees on every device.
+// A firm copy has no docket watch behind it, so the tab shows on your own wire only.
+var docket = { entries: [], lastRun: null, loaded: false, error: "" };
+if (FIRM_BUILD) {
+  document.querySelector('.filters button[data-f="docket"]').hidden = true;
+  document.querySelector(".channel-status .docket").hidden = true;
+}
+
+function loadDocket() {
+  if (FIRM_BUILD) return;
+  setStatus("docket", "scanning");
+  fetchT("/.netlify/functions/docket", {}, 15000).then(function (res) {
+    if (res.status === 404) throw new Error("DOCKET FUNCTION NOT DEPLOYED (404)");
+    if (!res.ok) throw new Error("DOCKET FUNCTION ERROR " + res.status);
+    return res.json();
+  }).then(function (data) {
+    docket.entries = Array.isArray(data.entries) ? data.entries : [];
+    docket.lastRun = data.lastRun || null;
+    docket.error = "";
+  }).catch(function (err) {
+    docket.error = err && err.message ? err.message : "COULD NOT LOAD THE DOCKET";
+  }).then(function () {
+    docket.loaded = true;
+    setStatus("docket", docket.error ? "error" : docket.entries.length ? "done" : "empty");
+    renderFeed();
+  });
+}
+
+function docketIsNew(e) {
+  var t = Date.parse(e.addedAt || "");
+  return !isNaN(t) && t >= Date.now() - NEW_HOURS * 3600000;
+}
+function docketDay(e) { return dayOf({ time: e.time, date: e.filed }); }
+// The window and the search box apply here as on the other tabs. A free copy in the RECAP
+// archive opens first, then the CourtListener docket, then PACER, which asks for a login.
+function docketLink(e) { return e.freeUrl || e.docketUrl || e.docUrl || ""; }
+function docketShown() {
+  var since = localDay(new Date(Date.now() - settings.windowDays * 86400000));
+  var words = queryWords(query);
+  return docket.entries.filter(function (e) {
+    if ((e.filed || "") < since) return false;
+    if (!words.length) return true;
+    var hay = [e.label, e.caseName, e.number, e.court, e.desc].join(" ").toLowerCase();
+    return words.every(function (w) { return hay.indexOf(w) !== -1; });
+  });
+}
+function pageName(p) {
+  return String(p).replace(/^https?:\/\/(www\.)?/i, "").replace(/\.html$/i, "").replace(/\/$/, "");
+}
+
+function renderDocket() {
+  var words = queryWords(query);
+  var all = docketShown();
+  var newCount = all.filter(docketIsNew).length;
+  var list = newOnly ? all.filter(docketIsNew) : all;
+  document.getElementById("newOnlyBtn").textContent = docket.loaded ? "NEW ONLY (" + newCount + ")" : "NEW ONLY";
+  document.getElementById("topicBar").innerHTML = "";
+
+  var html = "";
+  if (docket.error) html += '<div class="notice bad">DOCKET ✕ ' + esc(docket.error) + '</div>';
+  var run = docket.lastRun;
+  if (run) {
+    var at = new Date(run.at);
+    var when = isNaN(at.getTime()) ? "" : dayLabel(localDay(at)).split(" · ")[0] + " " +
+      at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    html += '<div class="notice">LAST DOCKET CHECK ' + esc(when) + ' · ' + run.cases + ' DOCKETS WATCHED · ' +
+      run.listed + ' ORDER' + (run.listed === 1 ? '' : 'S') + ' AND FILINGS LISTED, ' + run.routine +
+      ' ROUTINE ENTR' + (run.routine === 1 ? 'Y' : 'IES') + ' LEFT OFF' + (run.pacerFetch ? ' · PACER FETCH RAN' : '') + '</div>';
+  }
+  if (words.length) {
+    html += '<div class="notice searchnote"><span>' + list.length + (list.length === 1 ? ' MATCH' : ' MATCHES') +
+      ' FOR <span class="q">\u201C' + esc(query.trim()) + '\u201D</span> ON THE DOCKETS</span></div>';
+  }
+  if (!docket.loaded) {
+    html += '<div class="empty-state"><p class="display">Loading the docket.</p></div>';
+  } else if (!docket.entries.length && !docket.error) {
+    html += '<div class="empty-state"><p class="display">No docket entries yet.</p><p>The docket watch posts here after its next run.</p></div>';
+  } else if (!list.length && !words.length) {
+    html += '<div class="notice">' + (newOnly ? "NOTHING NEW ON THE DOCKETS IN THE LAST 24 HOURS." : "NO DOCKET ENTRIES IN THIS WINDOW.") + '</div>';
+  }
+
+  var dayCounts = {};
+  list.forEach(function (e) { var d = docketDay(e); dayCounts[d] = (dayCounts[d] || 0) + 1; });
+  var lastDay = null;
+  list.forEach(function (e) {
+    var day = docketDay(e);
+    if (day !== lastDay) {
+      html += '<div class="day"><span>' + esc(dayLabel(day)) + '</span><span class="n">' + dayCounts[day] + '</span></div>';
+      lastDay = day;
+    }
+    var href = docketLink(e);
+    var when = timeLabel({ time: e.time });
+    var where = e.freeUrl ? "FREE PDF" : e.docketUrl ? "COURTLISTENER" : e.docUrl ? "PACER (LOGIN)" : "";
+    var tags = (where ? '<span class="tag">' + where + '</span>' : '') +
+      (e.pages || []).map(function (p) { return '<span class="tag page">UPDATE: ' + esc(pageName(p)) + '</span>'; }).join("");
+    var inner = '<div class="src">DOCKET · ' + esc(e.label || e.number) +
+        (e.docNum ? ' · DKT. ' + esc(e.docNum) : '') + (when ? ' · ' + esc(when) : '') +
+        (docketIsNew(e) ? '<span class="new">NEW</span>' : '') + '</div>' +
+      '<div class="title">' + highlight(e.desc || "Docket entry", words) + '</div>' +
+      '<p class="sum">' + esc([e.caseName, e.number, (e.court || "").toUpperCase()].filter(Boolean).join(" · ")) + '</p>' +
+      (tags ? '<div class="tags">' + tags + '</div>' : '');
+    html += href
+      ? '<a class="item docket" href="' + attr(href) + '" target="_blank" rel="noopener noreferrer" data-tab="docket"' +
+        ' data-title="' + attr(e.desc) + '" data-source="' + attr(e.label) + '" data-topic="' + attr(e.label) + '">' + inner + '</a>'
+      : '<div class="item docket">' + inner + '</div>';
+  });
   document.getElementById("feed").innerHTML = html;
 }
 
