@@ -2694,6 +2694,15 @@ function docketShown() {
     return words.every(function (w) { return hay.indexOf(w) !== -1; });
   });
 }
+// The filing date, short, on the entry itself: the day group above says when a batch arrived,
+// the entry says when the court docketed it. The year shows only when it is not this year.
+function filedLabel(day) {
+  var d = new Date(day + "T12:00:00");
+  if (isNaN(d.getTime())) return day || "";
+  var opts = { month: "short", day: "numeric" };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString("en-US", opts).toUpperCase();
+}
 function pageName(p) {
   return String(p).replace(/^https?:\/\/(www\.)?/i, "").replace(/\.html$/i, "").replace(/\/$/, "");
 }
@@ -2744,7 +2753,8 @@ function renderDocket() {
     var tags = (where ? '<span class="tag">' + where + '</span>' : '') +
       (e.pages || []).map(function (p) { return '<span class="tag page">UPDATE: ' + esc(pageName(p)) + '</span>'; }).join("");
     var inner = '<div class="src">DOCKET · ' + esc(e.label || e.number) +
-        (e.docNum ? ' · DKT. ' + esc(e.docNum) : '') + (when ? ' · ' + esc(when) : '') +
+        (e.docNum ? ' · DKT. ' + esc(e.docNum) : '') +
+        ' · FILED ' + esc(filedLabel(e.filed)) + (when ? ' ' + esc(when) : '') +
         (docketIsNew(e) ? '<span class="new">NEW</span>' : '') + '</div>' +
       '<div class="title">' + highlight(e.desc || "Docket entry", words) + '</div>' +
       '<p class="sum">' + esc([e.caseName, e.number, (e.court || "").toUpperCase()].filter(Boolean).join(" · ")) + '</p>' +
