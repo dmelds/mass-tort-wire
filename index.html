@@ -1847,15 +1847,26 @@ function topicSearches(tab) {
 // you asked for that feed, so it never has to prove itself the way a Google News result does.
 function markDirect(res) {
   res.items.forEach(function (it) { it.direct = true; });
+  if (FIRM_BUILD) res.items = res.items.filter(publishDated);
   return res;
 }
 
+// On a firm copy the network's feeds sit in the firm's own News Wire list. They run at
+// OWN_FEED_ITEMS rather than 8, since the feeds function ranks them by revision date and a day
+// of revisions would otherwise push a page published this week off the end before the page
+// could keep it (publishDated).
+function isNetworkFeed(u) { return /^https:\/\/(lawsuitinformer|lawsuitintelligencer)\.com\/feed\.xml$/i.test(String(u).trim()); }
 function fetchNews() {
   var searches = topicSearches("");
+  var firmNews = settings.newsFeeds, networkNews = OWN_NEWS_FEEDS;
+  if (FIRM_BUILD) {
+    firmNews = settings.newsFeeds.filter(function (u) { return !isNetworkFeed(u); });
+    networkNews = settings.newsFeeds.filter(isNetworkFeed);
+  }
   return Promise.allSettled([
     runBatches(searches, 10),
-    runBatches(settings.newsFeeds, 8).then(markDirect),
-    runBatches(OWN_NEWS_FEEDS, OWN_FEED_ITEMS).then(markDirect),
+    runBatches(firmNews, 8).then(markDirect),
+    runBatches(networkNews, OWN_FEED_ITEMS).then(markDirect),
     runBatches(outletSearches(), 10),
     runBatches(settings.firmFeeds, 8).then(markDirect),
     runBatches(firmSearches(), 6)
@@ -2197,6 +2208,23 @@ function esc(s) {
   d.textContent = s == null ? "" : String(s);
   return d.innerHTML;
 }
+// Lawsuit Informer and Lawsuit Intelligencer date a feed item by its last revision, and the
+// desk wants that: an update page revised today is a new arrival there. A firm copy wants each
+// page once, on the day it went up. The network feeds carry that day as <atom:published>, which
+// the feeds function passes through as `published` (empty for every other feed). On a firm
+// copy a page takes its publish date as its date, so a revision never earns NEW again or moves
+// the page back to TODAY, and a page published before this window drops out rather than
+// settling at the bottom of an old day.
+function publishDated(it) {
+  if (!it.published) return true;
+  var pub = Date.parse(it.published);
+  if (isNaN(pub)) return true;
+  if (pub < Date.now() - settings.windowDays * 86400000) return false;
+  it.time = it.published;
+  it.date = it.published.slice(0, 10);
+  return true;
+}
+
 // esc() leaves double quotes alone, and a headline inside a data- attribute needs them escaped.
 function attr(s) { return esc(s).replace(/"/g, "&quot;"); }
 
