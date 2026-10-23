@@ -237,7 +237,7 @@ const GENERIC = /\b(lawsuits?|litigation|settlements?|claims?|mdl|class action|v
 // Terms that are also ordinary English words. "Roundup" names a herbicide and a news digest,
 // so matching the word alone tags faith, sports and regional roundups as mass tort coverage.
 // Kept in step with AMBIGUOUS_TERMS in index.html.
-const AMBIGUOUS_TERMS = { roundup: 1, "mass tort": 1 };
+const AMBIGUOUS_TERMS = { roundup: 1 };
 
 const LEGAL_WORDS = /\b(lawsuits?|litigation|settlements?|verdicts?|mdl|class action|claims?|court|judge|jury|trial|plaintiffs?|attorneys?|sued?|suing|damages|complaint|defendants?)\b/i;
 
