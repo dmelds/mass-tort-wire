@@ -1695,7 +1695,9 @@ function gnews(q) {
 // faith, sports and regional roundups. A term like that is searched paired with a legal word.
 // Every other term keeps the plain search, because pairing them finds nothing: "AFFF lawsuit"
 // and "AFFF settlement" as phrases return no articles at all, while plain AFFF returns 30.
-var AMBIGUOUS_TERMS = { roundup: 1 };
+// "mass tort" searched plainly matches "Mass." plus any legal word, so a Litify copy carried
+// four Law360 Massachusetts court stories on 10/23/26; paired, it finds only the phrase.
+var AMBIGUOUS_TERMS = { roundup: 1, "mass tort": 1 };
 var TOPIC_PAIRS = ["settlement", "lawsuit", "litigation", "MDL", "verdict", "trial", "deal"];
 
 // Extra Google News searches for a topic whose coverage rarely uses the topic's own words. State
