@@ -122,6 +122,10 @@ function parseFeed(xml, feedUrl) {
       url: clean(tag(block, "link")) || clean(tag(block, "guid")),
       date: isoDate(clean(tag(block, "pubDate")) || clean(tag(block, "dc:date"))),
       time: isoTime(clean(tag(block, "pubDate")) || clean(tag(block, "dc:date"))),
+      // The network's own feeds date an item by its last revision and carry the page's publish
+      // date beside it as <atom:published>. A firm copy dates the page by that instead (see
+      // markDirect in index.html). Empty for every other feed.
+      published: isoTime(clean(tag(block, "atom:published"))),
       // Aggregator descriptions only repeat the headline and publisher.
       summary: aggregator ? "" : truncate(clean(tag(block, "description")), 220),
       source: pub || source,
