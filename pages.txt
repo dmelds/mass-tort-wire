@@ -1,0 +1,65 @@
+# Which pages each Mass Tort Wire topic feeds. Read by scripts/wire_review.py.
+#
+#   topic | page page page ...
+#
+# The topic is the name as it appears in the wire's TRACKED TOPICS, without any
+# press aliases after "=". Matching ignores case. Pages are full URLs, separated
+# by spaces; the first page listed is the one the report leads with, so put the
+# updates page first and the evergreen pages after it. A topic on the wire with
+# no line here is listed at the foot of the report under "topics with no page",
+# so adding a topic to the wire shows up here as a reminder.
+#
+# A line starting with "-" names a topic the wire tracks that feeds no page by
+# design (an Intelligencer beat, say), so the report stops listing it as unmapped.
+#
+# Docket entries carry their own pages from docket/cases.txt and need no line.
+# A page cases.txt names that no topic line carries gets a section of its own in
+# the report, one per page, so a case with two pages reports twice; list such
+# pages on the topic they belong to and the entries fold into that section.
+#
+# Topics checked against the desk's TRACKED TOPICS on 10/21/26 (29 topics). Updated the same
+# day: baby food now leads with its update page, and Gerber, Beech-Nut, Character.AI, the
+# Informer states page and the Intelligencer ByHeart page are mapped. 10/23/26: the Tumbler
+# Ridge page and the Center's Rushlow case page added to OpenAI lawsuit, ending the doubled
+# Rushlow v. Altman section.
+# 10/24/26: AI chatbot lawsuit now leads with character-ai-lawsuit. The wire's stories under
+# this topic are Character.AI and state-AG items, and ai-injury-lawsuits is the evergreen
+# hub (18 days old on 10/24 while character-ai-lawsuit was 2), so the hub's age was
+# setting the topic HIGH for a cluster that had just been refreshed.
+
+# ── Lawsuit Informer updates pages and their clusters ──
+AFFF lawsuit | https://lawsuitinformer.com/afff-lawsuit-updates https://lawsuitinformer.com/afff-firefighting-foam-lawsuits
+PFAS litigation | https://lawsuitinformer.com/pfas-water-contamination-lawsuit-update https://lawsuitinformer.com/pfas-water-contamination-lawsuits https://lawsuit.center/pfas-lawsuit https://lawsuit.center/water-contamination-lawsuits
+Roundup settlement | https://lawsuitinformer.com/roundup-lawsuit-updates https://lawsuitinformer.com/roundup-cancer-lawsuits https://lawsuit.center/roundup-lawsuit
+Depo-Provera lawsuit | https://lawsuitinformer.com/depo-provera-lawsuit-updates https://lawsuitinformer.com/depo-provera-lawsuits
+hair relaxer lawsuit | https://lawsuitinformer.com/hair-relaxer-lawsuit-updates https://lawsuitinformer.com/hair-relaxer-cancer-lawsuit https://lawsuit.center/hair-relaxer-lawsuit
+asbestos lawsuit | https://lawsuitinformer.com/asbestos-lawsuit-updates https://lawsuitinformer.com/mesothelioma-lawsuit https://lawsuit.center/asbestos-lawsuits
+paraquat lawsuit | https://lawsuitinformer.com/paraquat-lawsuit-updates https://lawsuitinformer.com/paraquat-parkinsons-lawsuits https://lawsuit.center/paraquat-lawsuit
+talc lawsuit | https://lawsuitinformer.com/talcum-powder-lawsuit-updates https://lawsuitinformer.com/talcum-powder-ovarian-cancer-lawsuit https://lawsuit.center/talcum-powder-lawsuits
+Tylenol lawsuit | https://lawsuitinformer.com/tylenol-lawsuit-updates https://lawsuitinformer.com/tylenol-autism-lawsuits https://lawsuit.center/tylenol-autism-lawsuit
+GLP-1 lawsuit | https://lawsuitinformer.com/ozempic-lawsuit-updates https://lawsuitinformer.com/ozempic-lawsuits https://lawsuitinformer.com/ozempic-vision-loss-lawsuit https://lawsuit.center/ozempic-lawsuit
+transvaginal mesh lawsuit | https://lawsuitinformer.com/transvaginal-mesh-litigation-update https://lawsuitinformer.com/transvaginal-mesh-lawsuits
+social media addiction lawsuit | https://lawsuitinformer.com/social-media-addiction-lawsuit-update https://lawsuitinformer.com/social-media-addiction-lawsuit https://lawsuit.center/social-media-addiction-lawsuit https://lawsuit.center/instagram-lawsuit https://lawsuit.center/tiktok-lawsuit
+video game addiction lawsuit | https://lawsuitinformer.com/video-game-addiction-lawsuit-update https://lawsuitinformer.com/video-game-addiction-lawsuit https://lawsuit.center/video-game-lawsuit
+House v. NCAA settlement | https://lawsuitinformer.com/house-ncaa-settlement-update https://lawsuitinformer.com/house-ncaa-settlement-explained
+hernia mesh lawsuit | https://lawsuitinformer.com/recent-developments-hernia-mesh-litigation https://lawsuitinformer.com/hernia-mesh-lawsuit
+baby food lawsuit | https://lawsuitinformer.com/baby-food-lawsuit-settlement https://lawsuitinformer.com/heavy-metals-baby-food-lawsuit https://lawsuitinformer.com/gerber-baby-food-lawsuit https://lawsuitinformer.com/beech-nut-baby-food-lawsuit https://lawsuit.center/baby-food-lawsuit
+ultra-processed food lawsuit | https://lawsuitinformer.com/ultra-processed-food-lawsuit https://lawsuitinformer.com/processed-food-addiction-lawsuit https://lawsuit.center/processed-food-lawsuit
+Camp Lejeune lawsuit | https://lawsuitinformer.com/camp-lejeune-water-contamination-lawsuit
+Roblox lawsuit | https://lawsuitinformer.com/roblox-lawsuit https://lawsuitinformer.com/baggaley-v-roblox
+NEC baby formula lawsuit | https://lawsuitinformer.com/nec-formula-products-and-brand-names
+ByHeart lawsuit | https://lawsuitintelligencer.com/byheart-mdl-3178
+
+# ── AI Wire topics ──
+OpenAI lawsuit | https://lawsuitinformer.com/openai-lawsuits https://lawsuitinformer.com/chatgpt-fsu-shooting-lawsuit https://lawsuitinformer.com/raine-v-openai-lawsuit https://lawsuitinformer.com/tumbler-ridge-openai-lawsuits https://lawsuit.center/rushlow-v-altman-lawsuit https://lawsuitintelligencer.com/ai-wrongful-death-docket
+AI chatbot lawsuit | https://lawsuitinformer.com/character-ai-lawsuit https://lawsuitinformer.com/ai-injury-lawsuits https://lawsuitinformer.com/states-suing-ai-companies https://lawsuitintelligencer.com/ai-wrongful-death-docket
+state attorney general lawsuit | https://lawsuitintelligencer.com/state-ai-enforcement-tracker https://lawsuitinformer.com/states-suing-ai-companies
+
+# ── Intelligencer trackers ──
+mass tort | https://lawsuitintelligencer.com/mass-tort-map
+
+# ── Tracked on the wire, no page to update ──
+- AI in court
+- law firm MSO
+- mass tort advertising
+- deepfake lawsuit
